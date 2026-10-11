@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -51,10 +50,7 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: _textTheme.titleLarge?.copyWith(
-          color: AppColors.danger,
-          letterSpacing: 3,
-        ),
+        foregroundColor: AppColors.danger,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
       cardTheme: CardThemeData(
@@ -70,9 +66,7 @@ class AppTheme {
           backgroundColor: AppColors.danger,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: GoogleFonts.shareTechMono(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -85,9 +79,7 @@ class AppTheme {
           foregroundColor: AppColors.amber,
           side: const BorderSide(color: AppColors.amber, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: GoogleFonts.shareTechMono(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -179,18 +171,9 @@ class AppTheme {
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
       ),
-      bodyLarge: mono(
-        fontSize: 16,
-        color: AppColors.textPrimary,
-      ),
-      bodyMedium: mono(
-        fontSize: 14,
-        color: AppColors.textSecondary,
-      ),
-      bodySmall: mono(
-        fontSize: 12,
-        color: AppColors.textDim,
-      ),
+      bodyLarge: mono(fontSize: 16, color: AppColors.textPrimary),
+      bodyMedium: mono(fontSize: 14, color: AppColors.textSecondary),
+      bodySmall: mono(fontSize: 12, color: AppColors.textDim),
       labelLarge: mono(
         fontSize: 14,
         fontWeight: FontWeight.bold,
@@ -210,13 +193,7 @@ BoxDecoration glowingCardDecoration({
     color: AppColors.card,
     borderRadius: BorderRadius.circular(12),
     border: Border.all(color: borderColor, width: 1),
-    boxShadow: [
-      BoxShadow(
-        color: glowColor,
-        blurRadius: 20,
-        spreadRadius: -5,
-      ),
-    ],
+    boxShadow: [BoxShadow(color: glowColor, blurRadius: 20, spreadRadius: -5)],
   );
 }
 

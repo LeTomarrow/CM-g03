@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
-import 'package:what_did_you_press/features/menu.dart';
+import 'package:what_did_you_press/core/widgets.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});

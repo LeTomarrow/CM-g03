@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/features/menu.dart';
+import 'package:what_did_you_press/core/app_theme.dart';
 
 void main() {
   runApp(const MainApp());
@@ -10,8 +11,6 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: MenuPage(),
-    );
+    return MaterialApp(theme: AppTheme.darkTheme, home: const MenuPage());
   }
 }

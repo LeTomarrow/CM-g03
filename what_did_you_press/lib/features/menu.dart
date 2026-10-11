@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
+import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/account.dart';
 import 'package:what_did_you_press/features/configs.dart';
 import 'package:what_did_you_press/features/help.dart';
@@ -86,42 +87,6 @@ class _GamePageState extends State<GamePage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class MenuButton extends StatelessWidget {
-  const MenuButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.color = AppColors.danger,
-  });
-
-  final String label;
-  final void Function() onPressed;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(color: Colors.white),
         ),
       ),
     );

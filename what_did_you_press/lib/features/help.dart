@@ -38,7 +38,7 @@ class HelpPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         foregroundColor: AppColors.danger,
-        title: Text('LOBBY'),
+        title: Text('AJUDA'),
       ),
       body: SafeArea(
         child: ListView(
