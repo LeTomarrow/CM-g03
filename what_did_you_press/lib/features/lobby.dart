@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/widgets.dart';
+import 'package:what_did_you_press/core/game_models.dart';
+import 'package:what_did_you_press/features/game/bomb.dart';
+import 'package:what_did_you_press/features/manual/manual.dart';
 
 class LobbyPage extends StatefulWidget {
   const LobbyPage({super.key});
@@ -11,6 +14,7 @@ class LobbyPage extends StatefulWidget {
 
 class _LobbyPageState extends State<LobbyPage> {
   final TextEditingController _codeController = TextEditingController();
+  PlayerRole _role = PlayerRole.defuser;
 
   @override
   void dispose() {
@@ -18,16 +22,19 @@ class _LobbyPageState extends State<LobbyPage> {
     super.dispose();
   }
 
+  void _startGame() {
+    final Widget page = _role == PlayerRole.defuser
+        ? const BombPage()
+        : const ManualPage();
+    Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
+  }
+
   Widget _buildPlayerSlot(String name, String role, bool isConnected) {
     Color color = isConnected ? AppColors.success : AppColors.amber;
 
     return Row(
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        ),
+        StatusLed(color: color),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
@@ -87,11 +94,17 @@ class _LobbyPageState extends State<LobbyPage> {
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 12),
-                  _buildPlayerSlot('P1: Bernardo', 'DEFUSER', true),
+                  _buildPlayerSlot('P1: Bernardo', _role.label, true),
                   const Divider(color: AppColors.metalGrey, height: 24),
-                  _buildPlayerSlot('À espera...', 'MANUAL', false),
+                  _buildPlayerSlot('À espera...', _role.partner.label, false),
                 ],
               ),
+            ),
+            const SizedBox(height: 16),
+            MenuButton(
+              label: 'TROCAR PAPÉIS',
+              onPressed: () => setState(() => _role = _role.partner),
+              color: AppColors.metalGrey,
             ),
             const SizedBox(height: 24),
             TextField(
@@ -131,7 +144,7 @@ class _LobbyPageState extends State<LobbyPage> {
             const SizedBox(height: 40),
             MenuButton(
               label: 'COMEÇAR',
-              onPressed: () {},
+              onPressed: _startGame,
               color: AppColors.danger,
             ),
           ],

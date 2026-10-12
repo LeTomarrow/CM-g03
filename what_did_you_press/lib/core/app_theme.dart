@@ -16,6 +16,7 @@ class AppColors {
   static const Color amber = Color(0xFFFFB300);
   static const Color success = Color(0xFF00E676);
   static const Color neonBlue = Color(0xFF00E5FF);
+  static const Color neonPurple = Color(0xFFD500F9);
 
   // Text
   static const Color textPrimary = Color(0xFFE0E0E0);

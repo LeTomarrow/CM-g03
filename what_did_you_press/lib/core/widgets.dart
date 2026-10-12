@@ -37,6 +37,34 @@ class MenuButton extends StatelessWidget {
   }
 }
 
+/// Asks before leaving a running game. Returns `true` if the player confirms.
+Future<bool> confirmLeaveGame(BuildContext context, String message) async {
+  final leave = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: AppColors.card,
+      title: Text('ABANDONAR JOGO?', style: TextStyle(color: AppColors.danger)),
+      content: Text(message, style: TextStyle(color: AppColors.textPrimary)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(
+            'CONTINUAR',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text('ABANDONAR', style: TextStyle(color: AppColors.danger)),
+        ),
+      ],
+    ),
+  );
+
+  // Tapping outside the dialog returns null: treat it as "stay".
+  return leave ?? false;
+}
+
 /// Small glowing dot used for player and module status.
 class StatusLed extends StatelessWidget {
   const StatusLed({super.key, required this.color, this.size = 10});

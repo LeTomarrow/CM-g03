@@ -45,23 +45,23 @@ class HelpPage extends StatelessWidget {
           padding: const EdgeInsets.all(24.0),
           children: [
             _buildCard(
-              'THE MISSION',
-              'You and your partner are tasked with defusing a highly volatile explosive device. One of you can see the bomb, but cannot read the manual. The other has the manual, but cannot see the bomb.',
+              'A MISSÃO',
+              'Tu e o teu parceiro têm de desarmar um engenho explosivo altamente instável. Um de vocês vê a bomba, mas não consegue ler o manual. O outro tem o manual, mas não vê a bomba.',
               color: AppColors.danger,
             ),
             _buildCard(
-              'THE DEFUSER',
-              'Your screen shows the bomb and its various modules. You must describe what you see to your partner and execute their instructions perfectly. One wrong move, and it\'s game over.',
+              'O SAPADOR',
+              'O teu ecrã mostra a bomba e os seus módulos. Tens de descrever o que vês ao teu parceiro e seguir as instruções à risca. Um passo em falso e acabou.',
               color: AppColors.amber,
             ),
             _buildCard(
-              'THE MANUAL OPERATOR',
-              'You hold the defusal manual. You must quickly navigate its pages to find the correct instructions based on the Defuser\'s descriptions. Communicate clearly and quickly.',
+              'O LEITOR DO MANUAL',
+              'Tens o manual de desarmamento. Procura depressa as instruções certas a partir do que o sapador descreve. Comunica de forma clara e rápida.',
               color: AppColors.neonBlue,
             ),
             _buildCard(
-              'COMMUNICATION',
-              'Talk. Yell. Do whatever it takes to relay information accurately. Time is running out. "What did you press?!" might be the last words you hear.',
+              'COMUNICAÇÃO',
+              'Fala. Grita. Faz o que for preciso para passar a informação certa. O tempo está a acabar. "O que é que carregaste?!" podem ser as últimas palavras que ouves.',
               color: AppColors.success,
             ),
           ],

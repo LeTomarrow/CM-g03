@@ -46,7 +46,7 @@ class _GamePageState extends State<GamePage> {
                     style: TextStyle(color: AppColors.danger, fontSize: 48),
                   ),
                   Text(
-                    'Bomb Defusal Game',
+                    'Desarma a bomba. Juntos.',
                     style: TextStyle(color: AppColors.metalGrey, fontSize: 20),
                   ),
                 ],
