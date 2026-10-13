@@ -50,13 +50,13 @@ class HelpPage extends StatelessWidget {
               color: AppColors.danger,
             ),
             _buildCard(
-              'O SAPADOR',
+              'O OPERADOR',
               'O teu ecrã mostra a bomba e os seus módulos. Tens de descrever o que vês ao teu parceiro e seguir as instruções à risca. Um passo em falso e acabou.',
               color: AppColors.amber,
             ),
             _buildCard(
               'O LEITOR DO MANUAL',
-              'Tens o manual de desarmamento. Procura depressa as instruções certas a partir do que o sapador descreve. Comunica de forma clara e rápida.',
+              'Tens o manual de desarmamento. Procura depressa as instruções certas a partir do que o operador descreve. Comunica de forma clara e rápida.',
               color: AppColors.neonBlue,
             ),
             _buildCard(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 
 enum PlayerRole {
-  defuser('SAPADOR'),
+  defuser('OPERADOR'),
   manual('MANUAL');
 
   const PlayerRole(this.label);

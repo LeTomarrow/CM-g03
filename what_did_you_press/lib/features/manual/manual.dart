@@ -249,12 +249,12 @@ class _ManualPageState extends State<ManualPage> {
                     ModuleType.drawing.color,
                     [
                       _buildText(
-                        'O sapador desenha o símbolo que vê. Encontra-o abaixo '
+                        'O operador desenha o símbolo que vê. Encontra-o abaixo '
                         'e diz-lhe que fio cortar.',
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'DESENHO DO SAPADOR (EM DIRETO)',
+                        'DESENHO DO OPERADOR (EM DIRETO)',
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: 8),

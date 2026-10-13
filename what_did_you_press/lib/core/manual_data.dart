@@ -185,7 +185,7 @@ const String restoreCommand = 'energia --repor';
 
 /// Hacker attacks: what the players notice and the command that stops it.
 enum HackType {
-  flash('Ecrã do sapador a piscar', 'bloquear --ecra'),
+  flash('Ecrã do operador a piscar', 'bloquear --ecra'),
   vibration('Vibração contínua no manual', 'parar --vibracao'),
   lights('Manual às escuras', '$restoreCommand <senha>');
 
