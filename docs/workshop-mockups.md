@@ -28,7 +28,7 @@ Todo o código deste documento foi compilado e testado (`flutter analyze` sem av
 - [Extras: sensores reais](#extras-sensores-reais)
 - [Próximos passos](#próximos-passos)
 
-**Divisão sugerida para dois:** depois do passo 2 feito em conjunto, um faz o lado do **sapador** (passos 3 a 9, incluindo o 7b) e o outro o lado do **manual** (passos 10 e 11). O passo 12 junta tudo. Os dois lados só partilham os ficheiros de `lib/core/`, por isso não há conflitos de merge.
+**Divisão sugerida para dois:** depois do passo 2 feito em conjunto, um faz o lado do **operador** (passos 3 a 9, incluindo o 7b) e o outro o lado do **manual** (passos 10 e 11). O passo 12 junta tudo. Os dois lados só partilham os ficheiros de `lib/core/`, por isso não há conflitos de merge.
 
 ---
 
@@ -59,7 +59,7 @@ Quatro convenções novas que vamos introduzir:
 ### Mapa da app
 
 ```
-MENU ──► LOBBY ──┬── (SAPADOR) ──► BOMBA ──► ÂNGULO / BÚSSOLA / MORSE / SÍMBOLOS
+MENU ──► LOBBY ──┬── (OPERADOR) ──► BOMBA ──► ÂNGULO / BÚSSOLA / MORSE / SÍMBOLOS
                  │                   │             (pop true/false)
                  │                   └──► RESULTADO ──► LOBBY | MENU
                  │
@@ -278,7 +278,7 @@ O ecrã de Ajuda e o subtítulo do menu estavam em inglês. Traduzam-nos para fi
              _buildCard(
 -              'THE DEFUSER',
 -              'Your screen shows the bomb and its various modules. You must describe what you see to your partner and execute their instructions perfectly. One wrong move, and it\'s game over.',
-+              'O SAPADOR',
++              'O OPERADOR',
 +              'O teu ecrã mostra a bomba e os seus módulos. Tens de descrever o que vês ao teu parceiro e seguir as instruções à risca. Um passo em falso e acabou.',
                color: AppColors.amber,
              ),
@@ -286,7 +286,7 @@ O ecrã de Ajuda e o subtítulo do menu estavam em inglês. Traduzam-nos para fi
 -              'THE MANUAL OPERATOR',
 -              'You hold the defusal manual. You must quickly navigate its pages to find the correct instructions based on the Defuser\'s descriptions. Communicate clearly and quickly.',
 +              'O LEITOR DO MANUAL',
-+              'Tens o manual de desarmamento. Procura depressa as instruções certas a partir do que o sapador descreve. Comunica de forma clara e rápida.',
++              'Tens o manual de desarmamento. Procura depressa as instruções certas a partir do que o operador descreve. Comunica de forma clara e rápida.',
                color: AppColors.neonBlue,
              ),
              _buildCard(
@@ -335,7 +335,7 @@ import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 
 enum PlayerRole {
-  defuser('SAPADOR'),
+  defuser('OPERADOR'),
   manual('MANUAL');
 
   const PlayerRole(this.label);
@@ -381,7 +381,7 @@ double angleDistance(double a, double b) {
 ```
 
 Notas:
-- Os papéis aparecem no ecrã como `SAPADOR` e `MANUAL`.
+- Os papéis aparecem no ecrã como `OPERADOR` e `MANUAL`.
 - `PlayerRole.partner` devolve o outro papel, o que dá jeito no lobby ("trocar papéis").
 - `angleDistance(355, 5)` dá `10` e não `350`. Sem isto, apontar para 359° quando o alvo é 0° contava como errado.
 - `formatTime` fica aqui porque é usado pela bomba e pelo ecrã de resultado.
@@ -394,7 +394,7 @@ Notas:
 
 ## Passo 2: dados do manual
 
-O sapador e o manual têm de "concordar" nas regras. Se a tabela de ângulos estiver num ficheiro e o texto do manual noutro, mais cedo ou mais tarde vão divergir. Por isso há **um único ficheiro** que os módulos usam para validar respostas e que o manual usa para se desenhar.
+O operador e o manual têm de "concordar" nas regras. Se a tabela de ângulos estiver num ficheiro e o texto do manual noutro, mais cedo ou mais tarde vão divergir. Por isso há **um único ficheiro** que os módulos usam para validar respostas e que o manual usa para se desenhar.
 
 Criem `lib/core/manual_data.dart`:
 
@@ -586,7 +586,7 @@ const String restoreCommand = 'energia --repor';
 
 /// Hacker attacks: what the players notice and the command that stops it.
 enum HackType {
-  flash('Ecrã do sapador a piscar', 'bloquear --ecra'),
+  flash('Ecrã do operador a piscar', 'bloquear --ecra'),
   vibration('Vibração contínua no manual', 'parar --vibracao'),
   lights('Manual às escuras', '$restoreCommand <senha>');
 
@@ -630,7 +630,7 @@ Notas:
 Os quatro minijogos têm a mesma estrutura: título com a cor do módulo, conteúdo a fazer scroll e um botão "CONFIRMAR" fixo em baixo. Em vez de repetir isto quatro vezes, fica num widget `ModuleFrame`.
 
 Neste ficheiro estão também dois widgets partilhados:
-- `SequencePanel`: o cartão com a sequência que o sapador tem de ler em voz alta (ÂNGULO e BÚSSOLA).
+- `SequencePanel`: o cartão com a sequência que o operador tem de ler em voz alta (ÂNGULO e BÚSSOLA).
 - `AimDial`: um mostrador circular com ponteiro, desenhado com `CustomPainter` (o mesmo mecanismo do `ScanlineOverlay` que já têm no `app_theme.dart`).
 
 **Conceito novo: `CustomPainter`.** Recebe um `Canvas` e um `Size` e desenha com `drawCircle` e `drawLine`. O `shouldRepaint` só devolve `true` quando o ângulo muda, para não redesenhar sem necessidade. Os ângulos usam 0° = topo e sentido horário, por isso a direção é `Offset(sin(a), -cos(a))` (o eixo Y do ecrã cresce para baixo).
@@ -835,7 +835,7 @@ class _DialPainter extends CustomPainter {
 └────────────────────────────────┘
 ```
 
-**Fluxo de jogo:** o sapador lê a sequência, o manual procura-a na tabela e diz o ângulo, e o sapador roda o telemóvel até lá e confirma.
+**Fluxo de jogo:** o operador lê a sequência, o manual procura-a na tabela e diz o ângulo, e o operador roda o telemóvel até lá e confirma.
 
 **Nesta fase o sensor é simulado com um `Slider`**, para poderem testar no emulador. O [Extra A](#extra-a-ângulo-com-sensor-real) troca o slider pelo sensor real (são cerca de 15 linhas).
 
@@ -992,7 +992,7 @@ class _CompassModulePageState extends State<CompassModulePage> {
 └────────────────────────────────┘
 ```
 
-**Fluxo de jogo:** o sapador carrega em "RECEBER SINAL", sente (e, no mockup, vê) os pontos e traços e dita-os. O manual descodifica a palavra com o alfabeto Morse, procura a frequência e diz qual escolher.
+**Fluxo de jogo:** o operador carrega em "RECEBER SINAL", sente (e, no mockup, vê) os pontos e traços e dita-os. O manual descodifica a palavra com o alfabeto Morse, procura a frequência e diz qual escolher.
 
 **Conceito novo: animação com `async`/`await`.** Para tocar uma sequência com tempos não é preciso `AnimationController`: basta um ciclo com `await Future.delayed(...)`. O cuidado importante é verificar `mounted` depois de cada `await`, porque o jogador pode sair do ecrã a meio, e chamar `setState` num widget que já foi destruído dá erro.
 
@@ -1122,7 +1122,7 @@ class _MorseModulePageState extends State<MorseModulePage> {
 }
 ```
 
-> **Design de jogo:** o LED ajuda a testar, mas torna o módulo fácil demais, porque o sapador pode ler o código a olhar. Na versão final ponderem esconder o LED e deixar só a vibração.
+> **Design de jogo:** o LED ajuda a testar, mas torna o módulo fácil demais, porque o operador pode ler o código a olhar. Na versão final ponderem esconder o LED e deixar só a vibração.
 
 ---
 
@@ -1142,7 +1142,7 @@ class _MorseModulePageState extends State<MorseModulePage> {
 └────────────────────────────────┘
 ```
 
-É o único minijogo sem sensores: o sapador descreve o painel ("estrela vermelha, bola azul..."), o manual aplica as regras e diz em qual carregar.
+É o único minijogo sem sensores: o operador descreve o painel ("estrela vermelha, bola azul..."), o manual aplica as regras e diz em qual carregar.
 
 **Conceito novo: `GridView` dentro de `ListView`.** Uma grelha dentro de uma lista que já faz scroll precisa de `shrinkWrap: true` (para ocupar só o que precisa) e de `NeverScrollableScrollPhysics()` (para não competir com o scroll da lista).
 
@@ -1251,7 +1251,7 @@ class _SymbolsModulePageState extends State<SymbolsModulePage> {
 └────────────────────────────────┘
 ```
 
-**Fluxo de jogo:** o sapador vê um símbolo estranho, difícil de descrever por palavras, e desenha-o. O manual vê o desenho **em direto**, procura o símbolo no catálogo e diz que fio cortar.
+**Fluxo de jogo:** o operador vê um símbolo estranho, difícil de descrever por palavras, e desenha-o. O manual vê o desenho **em direto**, procura o símbolo no catálogo e diz que fio cortar.
 
 O módulo tem duas partes: os widgets de desenho, que vão para `core/` porque o manual também os usa, e a página do módulo.
 
@@ -1693,7 +1693,7 @@ class ResultPage extends StatelessWidget {
 └────────────────────────────────┘
 ```
 
-É o ecrã central do sapador, e o que tem mais conceitos novos:
+É o ecrã central do operador, e o que tem mais conceitos novos:
 
 | Conceito | Para quê |
 |---|---|
@@ -2156,7 +2156,7 @@ Para simular ataques sem o segundo telemóvel, o botão 🐞 na AppBar escolhe u
 - `flash` / `vibration`: aparece um banner vermelho "CHAT DE VOZ CAÍDO" com o sintoma;
 - `lights`: um `Stack` + `Positioned.fill` tapa o manual todo e deixa só o acesso ao terminal, tal como está na definição do projeto. O texto do ecrã preto manda o jogador ao terminal, onde está o puzzle da senha.
 
-A secção DESENHO mostra o desenho do sapador em direto (um `ValueListenableBuilder` sobre o `liveDrawing`) e, por baixo, o catálogo de símbolos com o fio de cada um. O `_buildRow` deixa a coluna da direita quebrar linha (`Flexible`), para não dar overflow com o tamanho de letra aumentado nas definições do telemóvel.
+A secção DESENHO mostra o desenho do operador em direto (um `ValueListenableBuilder` sobre o `liveDrawing`) e, por baixo, o catálogo de símbolos com o fio de cada um. O `_buildRow` deixa a coluna da direita quebrar linha (`Flexible`), para não dar overflow com o tamanho de letra aumentado nas definições do telemóvel.
 
 Tal como a bomba, o manual está dentro de um `PopScope`: sair pede confirmação ("O teu parceiro fica sozinho com a bomba.").
 
@@ -2414,12 +2414,12 @@ class _ManualPageState extends State<ManualPage> {
                     ModuleType.drawing.color,
                     [
                       _buildText(
-                        'O sapador desenha o símbolo que vê. Encontra-o abaixo '
+                        'O operador desenha o símbolo que vê. Encontra-o abaixo '
                         'e diz-lhe que fio cortar.',
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'DESENHO DO SAPADOR (EM DIRETO)',
+                        'DESENHO DO OPERADOR (EM DIRETO)',
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
                       const SizedBox(height: 8),
@@ -2479,7 +2479,7 @@ Repararam no `final hack = _activeHack;` no início do `build`? Copiar o campo p
 
 ## Passo 12: ligar tudo no lobby
 
-Por fim, o lobby passa a saber o papel do jogador. "TROCAR PAPÉIS" alterna entre sapador e manual, e "COMEÇAR" abre o ecrã certo. Aproveitamos também para usar o `StatusLed` no lugar do `Container` desenhado à mão.
+Por fim, o lobby passa a saber o papel do jogador. "TROCAR PAPÉIS" alterna entre operador e manual, e "COMEÇAR" abre o ecrã certo. Aproveitamos também para usar o `StatusLed` no lugar do `Container` desenhado à mão.
 
 Alterações em `lib/features/lobby.dart` (as linhas com `-` saem e as com `+` entram):
 
@@ -2560,7 +2560,7 @@ Alterações em `lib/features/lobby.dart` (as linhas com `-` saem e as com `+` e
            ],
 ```
 
-**Checkpoint final:** voltem a pôr `home: const MenuPage()` no `main.dart`. O caminho JOGAR → TROCAR PAPÉIS → COMEÇAR deve levar à bomba ou ao manual consoante o papel (o "P1" mostra `SAPADOR` ou `MANUAL`).
+**Checkpoint final:** voltem a pôr `home: const MenuPage()` no `main.dart`. O caminho JOGAR → TROCAR PAPÉIS → COMEÇAR deve levar à bomba ou ao manual consoante o papel (o "P1" mostra `OPERADOR` ou `MANUAL`).
 
 ---
 
@@ -2799,8 +2799,8 @@ O `Vibration.vibrate(duration: ...)` vibra durante o tempo exato do ponto ou tra
 
 Por ordem do que mais desbloqueia:
 
-1. **Sincronização entre os dois telemóveis.** É o maior desafio do projeto. O Firebase entra no lobby: junta os dois jogadores, mesmo em redes diferentes, e serve para trocar a sinalização do WebRTC (oferta, resposta e candidatos ICE). Daí para a frente o jogo vai por P2P, num *data channel* na mesma ligação do chat de voz. O sapador é a fonte de verdade (puzzles escolhidos, tempo, erros) e o manual recebe eventos como "ataque X começou" ou os traços do DESENHO, que hoje passam pelo `liveDrawing`.
+1. **Sincronização entre os dois telemóveis.** É o maior desafio do projeto. O Firebase entra no lobby: junta os dois jogadores, mesmo em redes diferentes, e serve para trocar a sinalização do WebRTC (oferta, resposta e candidatos ICE). Daí para a frente o jogo vai por P2P, num *data channel* na mesma ligação do chat de voz. O operador é a fonte de verdade (puzzles escolhidos, tempo, erros) e o manual recebe eventos como "ataque X começou" ou os traços do DESENHO, que hoje passam pelo `liveDrawing`.
 2. **Chat de voz (WebRTC + microfone).** O ícone 🎤 da bomba e o banner "CHAT DE VOZ CAÍDO" do manual já estão no sítio: basta ligá-los ao estado real da chamada. Os hacks de voz passam a cortar o áudio de verdade até ao contra-ataque.
-3. **Sintomas reais dos hacks.** `flash` pode fazer piscar o ecrã do sapador (um `Timer` a alternar a cor de fundo), e `vibration` pode pôr o telemóvel do manual a vibrar em contínuo.
+3. **Sintomas reais dos hacks.** `flash` pode fazer piscar o ecrã do operador (um `Timer` a alternar a cor de fundo), e `vibration` pode pôr o telemóvel do manual a vibrar em contínuo.
 4. **Sensor de luz e orientação do ecrã** (ainda vazios na definição). Uma ideia que encaixa no tema: um módulo que só se resolve com o telemóvel tapado (sensor de luz) ou em landscape.
 5. **Persistir definições e perfil** (`shared_preferences`), para que "GUARDAR" deixe de ser só `pop()`.
