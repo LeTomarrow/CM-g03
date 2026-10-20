@@ -1,58 +1,30 @@
 # Firebase setup for developers
 
-The team shares the Firebase project `what-did-you-press` on the free Spark
-plan: Firestore, anonymous Auth, security rules and indexes. There are no Cloud
-Functions. **The app uses the live project by default**; local emulators are
-opt-in.
+The team shares `what-did-you-press`. The app uses Firebase Authentication and
+Cloud Firestore directly, with WebRTC carrying lobby messages. There are no
+Cloud Functions, backend builds, or callable endpoints. The Firestore database
+should be in Europe; database location is set in Firebase, not Dart.
 
-## Install once on each development machine
+## Install on each development machine
 
-Install Flutter/Dart, Node.js, npm, and a JDK **21 or newer** for Firestore
-emulation. Then:
+Install Flutter/Dart, Node.js/npm for the Firebase CLI, and JDK 21 or newer for
+the Firestore emulator. Then:
 
 ```bash
 npm install -g firebase-tools
 ```
 
-From `CM-g03/`:
+From the repository root:
 
 ```bash
-npm --prefix tests/firestore-rules ci
 cd what_did_you_press
 flutter pub get
 ```
 
-Use the Firebase configuration included in the repository. **Do not run
-`firebase init` on each clone**, create a new Firebase project, or download an
-Admin SDK key. Local emulators do not require project membership. Log in with
-your own account (`firebase login`) when deploying to the shared live project.
+Use the Firebase configuration already in the repository. Do not rerun
+`firebase init`, create another project, or download an Admin SDK key.
 
-## Run against the live project
-
-From `CM-g03/what_did_you_press/`:
-
-```bash
-flutter run -d DEVICE_ID
-flutter build apk   # installable APK for the phones
-```
-
-Any phone with Internet access works; no computer is needed. Data appears in
-the [Firebase console](https://console.firebase.google.com/project/what-did-you-press/firestore).
-
-## Deploy rules and indexes
-
-After changing `firestore.rules` or `firestore.indexes.json`, test them (see
-[Firebase rooms](firebase-rooms.md)) and deploy from `CM-g03/`:
-
-```bash
-firebase deploy --project what-did-you-press --only firestore
-```
-
-New indexes take a few minutes to build; nearby-bomb queries fail until then.
-Anonymous sign-in must be enabled once in the console under Authentication →
-Sign-in method.
-
-## Run locally with emulators
+## Run locally
 
 Terminal 1, from **`CM-g03/`**:
 
@@ -60,51 +32,99 @@ Terminal 1, from **`CM-g03/`**:
 firebase emulators:start --project what-did-you-press --only auth,firestore
 ```
 
+Wait for both emulators to be ready. There is no Functions emulator or
+TypeScript compilation step anymore. Restart an already-running emulator
+suite after this migration to load the new access rules.
+
 Terminal 2, from **`CM-g03/what_did_you_press/`**:
 
 ```bash
-flutter run -d web-server --web-port 8085 --dart-define=USE_FIREBASE_EMULATORS=true
+flutter run -d web-server --web-port 8085
 ```
 
-Open **http://localhost:8085** in your browser. Press **JOGAR → CRIAR**. The
-six-digit code should appear in the lobby. Check the room under
-**http://127.0.0.1:4000/firestore** and users under
-**http://127.0.0.1:4000/auth**. Local data does not appear in the live console.
+Open **http://localhost:8085** in your browser. Chrome is not required. The app
+uses emulators by default. Press JOGAR → CRIAR. Open a separate browser profile
+or private window, enter the displayed code and press ENTRAR. Two ordinary tabs
+usually share an anonymous identity and are not two separate players.
 
-Use a private window or another browser for the second player, then enter the
-code and press ENTRAR. Ordinary tabs share the signed-in identity, so they may
-be treated as the same player. Both clients must reach the same emulator set.
+Check the signaling document at **http://127.0.0.1:4000/firestore**, and users
+at **http://127.0.0.1:4000/auth**. Roles no longer appear in Firestore: they
+travel directly through WebRTC. Wait for the lobby to report that the peer
+connection is established before starting. Host start deletes the signaling
+room after the guest acknowledges; both screens then open their assigned role.
 
-Emulator ports are Auth **9099**, Firestore **8080**, and UI **4000**.
-`main.dart` configures them after Firebase initialization. Web and desktop use
-`127.0.0.1`; Android emulators use `10.0.2.2` automatically. Linux desktop is
-not configured; use web or Android from a Linux computer.
+Local ports: Auth **9099**, Firestore **8080**, Emulator UI **4000**, and web
+app **8085** in the command above. The local data is not in the live console.
+Fully restart Flutter and refresh the browser after startup changes.
 
-For a physical Android phone, use your computer's LAN address:
+For Android emulators, select the Android device in `flutter devices` and run
+`flutter run -d DEVICE_ID`. Firebase host `10.0.2.2` is selected automatically;
+web/desktop use `127.0.0.1`. Linux desktop Firebase is not configured; use web
+or Android from Linux. Physical Android phones need a LAN override:
 
 ```bash
-flutter run -d DEVICE_ID --dart-define=USE_FIREBASE_EMULATORS=true --dart-define=FIREBASE_EMULATOR_HOST=192.168.1.10
+flutter run -d DEVICE_ID --dart-define=FIREBASE_EMULATOR_HOST=192.168.1.10
 ```
 
-Replace that example address. The phone and computer must share a reachable
-network. In the root `firebase.json`, set `host` to `0.0.0.0` for the auth and
-firestore emulators to allow LAN access; the default bindings are loopback
-only. Allow their ports through your local firewall if needed. Only expose
-development emulators on a trusted local network.
+Replace the address with your development computer's LAN address. Bind auth
+and firestore emulator `host` values to `0.0.0.0` in root `firebase.json` for
+LAN access, allow the ports through the firewall, and use a trusted network.
+Remote browser tests need a secure origin (HTTPS) or localhost for WebRTC;
+Android phones are the recommended physical-device target.
 
-Fully stop/restart Flutter and refresh the page after changing startup config.
-Emulator state is temporary unless exported, for example with
-`firebase emulators:export emulator-data --project what-did-you-press` while
-running. Restore it with `--import=emulator-data` on the emulator start command.
+Emulator state is temporary. If useful, export to the ignored `emulator-data/`
+folder while running:
+
+```bash
+firebase emulators:export emulator-data --project what-did-you-press
+```
+
+Restore with `--import=emulator-data` on the start command. Use fresh rooms
+after the migration; old room documents have a different schema.
+
+## Use live Firebase without Cloud Functions
+
+The shared project needs Anonymous Authentication enabled and a default
+Standard Firestore database. Spark's no-cost quotas apply; Functions billing
+is not required for this design. From **`CM-g03/`**, a maintainer with access
+must deploy the new rules before any client writes can work:
+
+```bash
+firebase login
+firebase deploy --project what-did-you-press --only firestore:rules,firestore:indexes
+```
+
+From the Flutter folder, explicitly select live services:
+
+```bash
+flutter run -d web-server --web-port 8085 --dart-define=USE_FIREBASE_EMULATORS=false
+```
+
+This does not deploy an app or provision TURN. Firebase rules authorize the
+initial room and signaling operations; peer room logic runs on the clients.
+Deleted local source files do not remove any previously deployed Functions.
+If someone deployed old Functions, a maintainer should remove those obsolete
+endpoints separately in the Firebase/Google Cloud console.
 
 ## Troubleshooting
 
-`permission-denied` means the rules rejected a write. Locally, the emulator
-log names the failing rule line. The most common live cause is a phone clock
-far off real time, since the app judges expiry with its own clock while the
-rules use the server's. `operation-not-allowed` on sign-in means anonymous
-Auth is disabled. A nearby-bombs query failing with `failed-precondition`
-means the index is missing or still building.
+There are no Cloud Function logs to look for. Inspect browser Network/Console,
+Flutter output, Emulator UI, and Firestore documents. Browser signaling uses
+Firestore's SDK transport; there should be no `createRoom` HTTP endpoint call.
 
-Room behavior, limitations and rules tests are documented in
-[Firebase rooms](firebase-rooms.md).
+- Permission denied: ensure the new rules are loaded/deployed and Anonymous
+  Auth is enabled for live Firebase.
+- Connection refused: check that Auth and Firestore emulators are running and
+  that the client is using the right host.
+- Room created but peer connection fails: use two identities; verify both use
+  the same project/emulator and room code. Wait for offer, answer and candidates
+  in the signaling document. Restrictive networks can require a TURN relay.
+- Lost connection/start timeout: close and create a new room. Automatic
+  reconnection is not yet implemented.
+
+The host's initial mailbox lasts up to about one hour but is not automatically
+removed if the process crashes. Hosts clean up on normal exit and start. Rules
+deny joins/signaling after expiry. There is no scheduled cleanup service.
+
+See [room protocol and tests](firebase-rooms.md) for the message format,
+start acknowledgement/deletion sequence, security model and test commands.

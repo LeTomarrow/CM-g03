@@ -6,16 +6,15 @@ import 'package:geolocator/geolocator.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/geo.dart';
 import 'package:what_did_you_press/core/widgets.dart';
-import 'package:what_did_you_press/features/game/bomb.dart';
+import 'package:what_did_you_press/features/lobby.dart';
 import 'package:what_did_you_press/features/world/radar.dart';
 import 'package:what_did_you_press/services/bomb_service.dart';
-import 'package:what_did_you_press/services/room_service.dart';
 
 /// Resubscribe to nearby bombs after moving this far from the last query.
 const double _requeryDistanceMeters = 500;
 
 /// Open-world mode: plant bombs where you stand, or claim one within
-/// [claimRadiusMeters] and share the room code with your manual partner.
+/// [claimRadiusMeters] and host a room as its operator.
 class WorldPage extends StatefulWidget {
   const WorldPage({super.key});
 
@@ -25,17 +24,11 @@ class WorldPage extends StatefulWidget {
 
 class _WorldPageState extends State<WorldPage> {
   late final BombService _bombs = BombService();
-  late final RoomService _rooms = RoomService();
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<List<Bomb>>? _bombSubscription;
-  StreamSubscription<Room?>? _roomSubscription;
   Position? _position;
   Position? _queriedAt;
   List<Bomb> _nearby = const [];
-  Bomb? _claimed;
-  RoomConnection? _connection;
-  Room? _room;
-  bool _started = false;
   bool _busy = false;
   String? _error;
 
@@ -49,12 +42,6 @@ class _WorldPageState extends State<WorldPage> {
   void dispose() {
     _positionSubscription?.cancel();
     _bombSubscription?.cancel();
-    _roomSubscription?.cancel();
-    // Leaving before the game starts frees the bomb for other pairs.
-    final claimed = _claimed;
-    if (claimed != null && !_started) {
-      _bombs.resolveBomb(claimed.id, BombOutcome.abandoned).ignore();
-    }
     super.dispose();
   }
 
@@ -142,70 +129,16 @@ class _WorldPageState extends State<WorldPage> {
     );
   });
 
+  /// The lobby abandons the claim if the player leaves before starting.
   Future<void> _claim(Bomb bomb) => _run(() async {
     final position = _position;
-    if (position == null || _connection != null) return;
-    final connection = await _bombs.claimBomb(
-      bomb.id,
-      position.latitude,
-      position.longitude,
-    );
+    if (position == null) return;
+    await _bombs.claimBomb(bomb.id, position.latitude, position.longitude);
     if (!mounted) return;
-    setState(() {
-      _claimed = bomb;
-      _connection = connection;
-    });
-    _roomSubscription = _rooms
-        .watchRoom(connection.roomId)
-        .listen(
-          (room) {
-            if (mounted) setState(() => _room = room);
-          },
-          onError: (Object error) {
-            if (mounted) setState(() => _error = _errorMessage(error));
-          },
-        );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => LobbyPage(bombId: bomb.id)));
   });
-
-  Future<void> _abandon() => _run(() async {
-    final claimed = _claimed;
-    if (claimed == null) return;
-    await _roomSubscription?.cancel();
-    await _bombs.resolveBomb(claimed.id, BombOutcome.abandoned);
-    if (!mounted) return;
-    setState(() {
-      _claimed = null;
-      _connection = null;
-      _room = null;
-    });
-  });
-
-  void _startGame() {
-    final claimed = _claimed;
-    if (claimed == null || _room?.status != 'ready') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Espera que o manual entre na sala.')),
-      );
-      return;
-    }
-    _started = true;
-    final bombs = _bombs;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => BombPage(
-          // If this fails the claim lease expires and the bomb is re-armed.
-          onFinished: (defused) => bombs
-              .resolveBomb(
-                claimed.id,
-                defused ? BombOutcome.defused : BombOutcome.exploded,
-              )
-              .catchError((Object error) {
-                debugPrint('resolveBomb failed: $error');
-              }),
-        ),
-      ),
-    );
-  }
 
   String _errorMessage(Object error) {
     if (error is BombException) {
@@ -216,7 +149,6 @@ class _WorldPageState extends State<WorldPage> {
         BombFailure.ownBomb => 'Não podes desarmar a tua própria bomba.',
         BombFailure.limitReached =>
           'Já tens $maxActiveBombs bombas ativas no mapa.',
-        BombFailure.codeCollision => 'Algo correu mal. Tenta novamente.',
       };
     }
     if (error is FirebaseException) {
@@ -249,7 +181,7 @@ class _WorldPageState extends State<WorldPage> {
         : inRange
         ? ('DESARMAR', AppColors.success)
         : ('LONGE', AppColors.danger);
-    final canClaim = !own && claimable && inRange && _connection == null;
+    final canClaim = !own && claimable && inRange;
 
     return InkWell(
       onTap: canClaim ? () => _claim(bomb) : null,
@@ -273,48 +205,6 @@ class _WorldPageState extends State<WorldPage> {
             Text(label, style: TextStyle(color: color, fontSize: 12)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildClaim() {
-    final guestJoined = _room?.guestUid != null;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: AppColors.card,
-      child: Column(
-        children: [
-          Text(
-            'CÓDIGO PARA O MANUAL',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _connection!.code,
-            style: TextStyle(color: AppColors.amber, fontSize: 32),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            guestJoined
-                ? 'Manual ligado.'
-                : 'O manual entra pelo LOBBY → ENTRAR.',
-            style: TextStyle(
-              color: guestJoined ? AppColors.success : AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          MenuButton(
-            label: 'COMEÇAR',
-            onPressed: _startGame,
-            color: AppColors.danger,
-          ),
-          const SizedBox(height: 12),
-          MenuButton(
-            label: 'LARGAR BOMBA',
-            onPressed: _abandon,
-            color: AppColors.metalGrey,
-          ),
-        ],
       ),
     );
   }
@@ -356,10 +246,6 @@ class _WorldPageState extends State<WorldPage> {
                 style: TextStyle(color: AppColors.textDim, fontSize: 12),
               ),
               const SizedBox(height: 24),
-              if (_connection != null) ...[
-                _buildClaim(),
-                const SizedBox(height: 24),
-              ],
               Container(
                 padding: const EdgeInsets.all(16),
                 color: AppColors.card,

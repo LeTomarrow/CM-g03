@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:what_did_you_press/services/bomb_service.dart';
 import 'package:what_did_you_press/services/room_service.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/widgets.dart';
@@ -11,7 +12,12 @@ import 'package:what_did_you_press/features/game/bomb.dart';
 import 'package:what_did_you_press/features/manual/manual.dart';
 
 class LobbyPage extends StatefulWidget {
-  const LobbyPage({super.key});
+  const LobbyPage({super.key, this.roomServiceFactory, this.bombId});
+
+  final RoomService Function()? roomServiceFactory;
+
+  /// Open-world bomb claimed by this player, who hosts as the operator.
+  final String? bombId;
 
   @override
   State<LobbyPage> createState() => _LobbyPageState();
@@ -19,48 +25,76 @@ class LobbyPage extends StatefulWidget {
 
 class _LobbyPageState extends State<LobbyPage> {
   final TextEditingController _codeController = TextEditingController();
-  PlayerRole _role = PlayerRole.defuser;
-  late final RoomService _rooms = RoomService();
+  late RoomService _rooms = _newRoomService();
+  RoomService _newRoomService() {
+    final service = widget.roomServiceFactory?.call() ?? RoomService();
+    if (widget.bombId != null) service.rolesLocked = true;
+    return service;
+  }
+
+  late final BombService _bombs = BombService();
   StreamSubscription<Room?>? _roomSubscription;
   RoomConnection? _connection;
   Room? _room;
   bool _busy = false;
+  bool _openingGame = false;
+  bool _closureHandled = false;
+
+  bool get _isHost => _room != null && _room!.hostUid == _rooms.currentUserId;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.bombId != null) _connect(create: true);
+  }
 
   Future<void> _connect({required bool create}) async {
     if (_busy || _connection != null) return;
     setState(() {
       _busy = true;
       _error = null;
+      _closureHandled = false;
     });
     try {
       await _roomSubscription?.cancel();
       _roomSubscription = null;
+      await _rooms.close();
+      _rooms = _newRoomService();
       final connection = create
           ? await _rooms.createRoom()
           : await _rooms.joinRoom(_codeController.text);
-      if (!mounted) return;
+      if (!mounted) {
+        await _rooms.close();
+        return;
+      }
       setState(() => _connection = connection);
       _roomSubscription = _rooms
           .watchRoom(connection.roomId)
           .listen(
             (room) {
-              if (!mounted) return;
+              if (!mounted || _closureHandled) return;
+              if (room == null || room.status == 'closed') {
+                final isHost = (room ?? _room)?.hostUid == _rooms.currentUserId;
+                _handleRoomClosed(
+                  isHost
+                      ? 'O outro jogador saiu. Cria uma nova sala para continuar.'
+                      : 'O anfitrião encerrou a sala. Podes criar ou entrar noutra sala.',
+                );
+                return;
+              }
               setState(() {
                 _room = room;
-                _error = room == null ? 'A sala foi encerrada.' : null;
-                if (room == null) _connection = null;
+                _error = null;
               });
+              if (room.status == 'playing') _openGame(room);
             },
             onError: (Object error) {
-              if (!mounted) return;
+              if (!mounted || _closureHandled) return;
               setState(() {
                 _room = null;
                 _error = _errorMessage(error);
-                if (error is FirebaseException &&
-                    error.code == 'permission-denied') {
-                  _connection = null;
-                }
+                _connection = null;
               });
             },
           );
@@ -71,18 +105,59 @@ class _LobbyPageState extends State<LobbyPage> {
     }
   }
 
+  void _handleRoomClosed(String message) {
+    if (!mounted || _closureHandled || _openingGame) return;
+    _closureHandled = true;
+    final subscription = _roomSubscription;
+    final service = _rooms;
+    _roomSubscription = null;
+    setState(() {
+      _room = null;
+      _connection = null;
+      _busy = false;
+      _error = null;
+      _codeController.clear();
+    });
+    // Reset immediately; cleanup must not delay the remote closure notice.
+    unawaited(subscription?.cancel());
+    unawaited(service.close());
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: Text(
+            'SALA ENCERRADA',
+            style: TextStyle(color: AppColors.danger),
+          ),
+          content: Text(
+            message,
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'ENTENDIDO',
+                style: TextStyle(color: AppColors.amber),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _errorMessage(Object error) {
     if (error is ArgumentError) return 'Introduz um código de seis dígitos.';
-    if (error is RoomException) {
-      return switch (error.reason) {
-        RoomFailure.notFound => 'Sala não encontrada. Confirma o código.',
-        RoomFailure.full => 'A sala está cheia.',
-        RoomFailure.expired => 'A sala expirou. Cria uma nova.',
-        RoomFailure.codeCollision => 'Não foi possível criar a sala.',
-      };
-    }
     if (error is FirebaseException) {
+      if (error.plugin == 'room' && error.message != null) {
+        return error.message!;
+      }
       return switch (error.code) {
+        'not-found' =>
+          'Sala não encontrada. Confirma o código e a configuração.',
+        'failed-precondition' => 'A sala não está disponível para esta ação.',
         'permission-denied' => 'A sala foi encerrada ou não tens acesso.',
         'operation-not-allowed' => 'O início de sessão anónimo não está ativo.',
         'unavailable' || 'network-request-failed' =>
@@ -97,11 +172,36 @@ class _LobbyPageState extends State<LobbyPage> {
   @override
   void dispose() {
     _roomSubscription?.cancel();
+    // Leaving before the game starts frees the bomb for other players.
+    final bombId = widget.bombId;
+    if (bombId != null && !_openingGame) {
+      _bombs.resolveBomb(bombId, BombOutcome.abandoned).ignore();
+    }
+    if (!_openingGame) unawaited(_rooms.close());
     _codeController.dispose();
     super.dispose();
   }
 
-  void _startGame() {
+  Future<void> _leaveRoom() async {
+    if (_busy) return;
+    final subscription = _roomSubscription;
+    final service = _rooms;
+    _roomSubscription = null;
+    _closureHandled = true;
+    setState(() {
+      _connection = null;
+      _room = null;
+      _busy = false;
+      _error = null;
+      _codeController.clear();
+    });
+    // Notify/close the peer immediately, without waiting for UI stream teardown.
+    unawaited(subscription?.cancel());
+    await service.close();
+  }
+
+  Future<void> _startGame() async {
+    if (_busy || _openingGame) return;
     if (_room?.status != 'ready') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -110,10 +210,61 @@ class _LobbyPageState extends State<LobbyPage> {
       );
       return;
     }
-    final Widget page = _role == PlayerRole.defuser
+    if (!_isHost) return;
+    await _changeRoom(() => _rooms.startGame(_room!.id));
+  }
+
+  bool get _rolesFixed =>
+      _busy || _room == null || _openingGame || widget.bombId != null;
+
+  Future<void> _switchRoles() async {
+    final room = _room;
+    if (_busy || room == null || room.status == 'playing') return;
+    await _changeRoom(() => _rooms.switchRoles(room.id));
+  }
+
+  Future<void> _changeRoom(Future<void> Function() operation) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await operation();
+    } catch (error) {
+      if (mounted) setState(() => _error = _errorMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _openGame(Room room) {
+    if (_openingGame) return;
+    final uid = _rooms.currentUserId;
+    if (uid == null || (uid != room.hostUid && uid != room.guestUid)) return;
+    _openingGame = true;
+    final role = room.roleFor(uid);
+    final bombId = widget.bombId;
+    final Widget page = role == PlayerRole.manual
+        ? const ManualPage()
+        : bombId == null
         ? const BombPage()
-        : const ManualPage();
-    Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
+        : BombPage(
+            // If this fails the claim lease expires and the bomb is re-armed.
+            onFinished: (defused) => _bombs
+                .resolveBomb(
+                  bombId,
+                  defused ? BombOutcome.defused : BombOutcome.exploded,
+                )
+                .catchError((Object error) {
+                  debugPrint('resolveBomb failed: $error');
+                }),
+          );
+    // Acknowledged peer start; keep the DataChannel alive while playing.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => _PeerGame(service: _rooms, child: page),
+      ),
+    );
   }
 
   Widget _buildPlayerSlot(String name, String role, bool isConnected) {
@@ -166,9 +317,9 @@ class _LobbyPageState extends State<LobbyPage> {
                     _connection?.code ?? '------',
                     style: TextStyle(color: AppColors.amber, fontSize: 32),
                   ),
-                  if (_room?.bombId != null)
+                  if (widget.bombId != null)
                     Text(
-                      'BOMBA DO MUNDO',
+                      'BOMBA DO MUNDO · ÉS O OPERADOR',
                       style: TextStyle(color: AppColors.success),
                     ),
                 ],
@@ -186,23 +337,35 @@ class _LobbyPageState extends State<LobbyPage> {
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 12),
-                  _buildPlayerSlot('P1: Anfitrião', _role.label, _room != null),
+                  _buildPlayerSlot(
+                    _isHost ? 'P1: Anfitrião (tu)' : 'P1: Anfitrião',
+                    (_room?.hostRole ?? PlayerRole.defuser).label,
+                    _room != null,
+                  ),
                   const Divider(color: AppColors.metalGrey, height: 24),
                   _buildPlayerSlot(
                     _room?.guestUid != null
-                        ? 'P2: Jogador ligado'
+                        ? (_isHost
+                              ? 'P2: Jogador ligado'
+                              : 'P2: Jogador ligado (tu)')
                         : 'À espera...',
-                    _role.partner.label,
+                    (_room?.hostRole ?? PlayerRole.defuser).partner.label,
                     _room?.guestUid != null,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            MenuButton(
-              label: 'TROCAR PAPÉIS',
-              onPressed: () => setState(() => _role = _role.partner),
-              color: AppColors.metalGrey,
+            IgnorePointer(
+              ignoring: _rolesFixed,
+              child: Opacity(
+                opacity: _rolesFixed ? 0.5 : 1,
+                child: MenuButton(
+                  label: 'TROCAR PAPÉIS',
+                  onPressed: _switchRoles,
+                  color: AppColors.metalGrey,
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             TextField(
@@ -257,15 +420,68 @@ class _LobbyPageState extends State<LobbyPage> {
                 ),
               ),
             ),
+            if (_room != null) ...[
+              const SizedBox(height: 16),
+              Text(switch (_room!.status) {
+                'ready' => 'LIGAÇÃO ENTRE JOGADORES ESTABELECIDA',
+                'starting' => 'A CONFIRMAR O INÍCIO...',
+                'closed' => 'LIGAÇÃO ENCERRADA',
+                _ =>
+                  _room!.guestUid == null
+                      ? 'À ESPERA DE OUTRO JOGADOR'
+                      : 'A LIGAR AO OUTRO JOGADOR...',
+              }, style: TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              IgnorePointer(
+                ignoring: _busy,
+                child: Opacity(
+                  opacity: _busy ? 0.5 : 1,
+                  child: MenuButton(
+                    label: _isHost ? 'ENCERRAR SALA' : 'SAIR DA SALA',
+                    onPressed: _leaveRoom,
+                    color: _isHost ? AppColors.danger : AppColors.metalGrey,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 40),
-            MenuButton(
-              label: 'COMEÇAR',
-              onPressed: _startGame,
-              color: AppColors.danger,
+            IgnorePointer(
+              ignoring: _busy || !_isHost || _openingGame,
+              child: Opacity(
+                opacity: _busy || !_isHost || _openingGame ? 0.5 : 1,
+                child: MenuButton(
+                  label: _room != null && !_isHost
+                      ? 'À ESPERA DO ANFITRIÃO'
+                      : 'COMEÇAR',
+                  onPressed: _startGame,
+                  color: AppColors.danger,
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+/// Own the peer session after the lobby route is replaced by the game.
+class _PeerGame extends StatefulWidget {
+  const _PeerGame({required this.service, required this.child});
+  final RoomService service;
+  final Widget child;
+
+  @override
+  State<_PeerGame> createState() => _PeerGameState();
+}
+
+class _PeerGameState extends State<_PeerGame> {
+  @override
+  void dispose() {
+    unawaited(widget.service.close());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

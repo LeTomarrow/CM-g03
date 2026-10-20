@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:what_did_you_press/core/geo.dart';
 import 'package:what_did_you_press/services/anonymous_sign_in.dart';
-import 'package:what_did_you_press/services/room_service.dart';
 
 /// The rules cannot see GPS, so this distance is only checked on the client.
 const double claimRadiusMeters = 50;
@@ -21,7 +20,7 @@ const double nearbyRadiusMeters = 3000;
 
 enum BombOutcome { defused, exploded, abandoned }
 
-enum BombFailure { gone, busy, tooFar, ownBomb, limitReached, codeCollision }
+enum BombFailure { gone, busy, tooFar, ownBomb, limitReached }
 
 class BombException implements Exception {
   const BombException(this.reason);
@@ -42,7 +41,6 @@ class Bomb {
     required this.status,
     required this.active,
     required this.claimedBy,
-    required this.roomId,
     required this.claimExpiresAt,
     required this.expiresAt,
   });
@@ -54,7 +52,6 @@ class Bomb {
   final String status;
   final bool active;
   final String? claimedBy;
-  final String? roomId;
   final DateTime? claimExpiresAt;
   final DateTime expiresAt;
 
@@ -89,7 +86,6 @@ class Bomb {
       status: data['status'] as String,
       active: data['active'] as bool,
       claimedBy: data['claimedBy'] as String?,
-      roomId: data['roomId'] as String?,
       claimExpiresAt: claimedAt?.add(claimLease),
       expiresAt: createdAt.add(bombLifetime),
     );
@@ -135,7 +131,6 @@ class BombService {
           'status': 'armed',
           'active': true,
           'claimedBy': null,
-          'roomId': null,
           'claimedAt': null,
           'createdAt': FieldValue.serverTimestamp(),
         });
@@ -145,47 +140,33 @@ class BombService {
     });
   }
 
-  /// Opens a room for the bomb; the claimer is its host and shares the code.
-  Future<RoomConnection> claimBomb(
-    String bombId,
-    double lat,
-    double lng,
-  ) async {
+  /// Locks the bomb for one game ([claimLease]); the claimer then hosts an
+  /// ordinary room as operator. Claiming again with the same identity is safe.
+  Future<void> claimBomb(String bombId, double lat, double lng) async {
     final uid = await _signedInUid();
-    final bombRef = _bombs.doc(bombId);
-    for (var attempt = 0; attempt < roomCreateAttempts; attempt++) {
-      final code = randomRoomCode();
-      final roomRef = _firestore.collection('rooms').doc(code);
-      final roomId = await _firestore.runTransaction((transaction) async {
-        final snapshot = await transaction.get(bombRef);
-        if (!snapshot.exists) throw const BombException(BombFailure.gone);
-        final bomb = Bomb.fromSnapshot(snapshot);
-        final now = DateTime.now();
-        if (!bomb.isLive(now)) throw const BombException(BombFailure.gone);
-        if (bomb.plantedBy == uid) {
-          throw const BombException(BombFailure.ownBomb);
-        }
-        if (bomb.isLeased(now)) {
-          // Claiming again with the same identity returns the same room.
-          if (bomb.claimedBy == uid) return bomb.roomId;
-          throw const BombException(BombFailure.busy);
-        }
-        if (bomb.distanceTo(lat, lng) > claimRadiusMeters) {
-          throw const BombException(BombFailure.tooFar);
-        }
-        if ((await transaction.get(roomRef)).exists) return null;
-        transaction.set(roomRef, newRoomData(code, uid, bombId: bombId));
-        transaction.update(bombRef, {
-          'status': 'claimed',
-          'claimedBy': uid,
-          'roomId': code,
-          'claimedAt': FieldValue.serverTimestamp(),
-        });
-        return code;
+    final ref = _bombs.doc(bombId);
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+      if (!snapshot.exists) throw const BombException(BombFailure.gone);
+      final bomb = Bomb.fromSnapshot(snapshot);
+      final now = DateTime.now();
+      if (!bomb.isLive(now)) throw const BombException(BombFailure.gone);
+      if (bomb.plantedBy == uid) {
+        throw const BombException(BombFailure.ownBomb);
+      }
+      if (bomb.isLeased(now)) {
+        if (bomb.claimedBy == uid) return;
+        throw const BombException(BombFailure.busy);
+      }
+      if (bomb.distanceTo(lat, lng) > claimRadiusMeters) {
+        throw const BombException(BombFailure.tooFar);
+      }
+      transaction.update(ref, {
+        'status': 'claimed',
+        'claimedBy': uid,
+        'claimedAt': FieldValue.serverTimestamp(),
       });
-      if (roomId != null) return RoomConnection(roomId: roomId, code: roomId);
-    }
-    throw const BombException(BombFailure.codeCollision);
+    });
   }
 
   /// Only the claimer may resolve; abandoning re-arms the bomb.
@@ -195,12 +176,7 @@ class BombService {
         .doc(bombId)
         .update(
           outcome == BombOutcome.abandoned
-              ? {
-                  'status': 'armed',
-                  'claimedBy': null,
-                  'roomId': null,
-                  'claimedAt': null,
-                }
+              ? {'status': 'armed', 'claimedBy': null, 'claimedAt': null}
               : {
                   'status': outcome.name,
                   'active': false,
