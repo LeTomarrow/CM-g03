@@ -5,6 +5,18 @@ import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/geo.dart';
 import 'package:what_did_you_press/services/bomb_service.dart';
 
+/// Zoom steps for the radar, in meters.
+const List<double> radarRanges = [100, 250, 500, 1000, 3000];
+
+/// The smallest range that shows the nearest bomb with some margin.
+double radarRangeFor(double? nearestMeters) {
+  if (nearestMeters == null) return 500;
+  return radarRanges.firstWhere(
+    (range) => nearestMeters * 1.25 <= range,
+    orElse: () => radarRanges.last,
+  );
+}
+
 /// Top-down radar centred on the player; north is up.
 class BombRadar extends StatelessWidget {
   const BombRadar({

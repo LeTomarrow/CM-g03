@@ -215,7 +215,11 @@ class _LobbyPageState extends State<LobbyPage> {
   }
 
   bool get _rolesFixed =>
-      _busy || _room == null || _openingGame || widget.bombId != null;
+      _busy ||
+      _room == null ||
+      _openingGame ||
+      widget.bombId != null ||
+      _room!.rolesLocked;
 
   Future<void> _switchRoles() async {
     final room = _room;
@@ -317,9 +321,11 @@ class _LobbyPageState extends State<LobbyPage> {
                     _connection?.code ?? '------',
                     style: TextStyle(color: AppColors.amber, fontSize: 32),
                   ),
-                  if (widget.bombId != null)
+                  if (widget.bombId != null || _room?.rolesLocked == true)
                     Text(
-                      'BOMBA DO MUNDO · ÉS O OPERADOR',
+                      widget.bombId != null
+                          ? 'BOMBA DO MUNDO · ÉS O OPERADOR'
+                          : 'BOMBA DO MUNDO · ÉS O MANUAL',
                       style: TextStyle(color: AppColors.success),
                     ),
                 ],
@@ -367,27 +373,31 @@ class _LobbyPageState extends State<LobbyPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _codeController,
-              enabled: !_busy && _connection == null,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
-              ],
-              style: TextStyle(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                labelText: 'INTRODUZ O CÓDIGO',
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.metalGrey),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: AppColors.amber),
+            // A bomb room is created automatically; joining by code is for
+            // ordinary rooms only.
+            if (widget.bombId == null) ...[
+              const SizedBox(height: 24),
+              TextField(
+                controller: _codeController,
+                enabled: !_busy && _connection == null,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
+                style: TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'INTRODUZ O CÓDIGO',
+                  labelStyle: TextStyle(color: AppColors.textSecondary),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.metalGrey),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.amber),
+                  ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(height: 16),
             if (_busy) const LinearProgressIndicator(),
             if (_error != null)
@@ -395,31 +405,38 @@ class _LobbyPageState extends State<LobbyPage> {
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Text(_error!, style: TextStyle(color: AppColors.danger)),
               ),
-            IgnorePointer(
-              ignoring: _busy || _connection != null,
-              child: Opacity(
-                opacity: _busy || _connection != null ? 0.5 : 1,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: MenuButton(
-                        label: 'ENTRAR',
-                        onPressed: () => _connect(create: false),
-                        color: AppColors.neonBlue,
+            if (widget.bombId == null)
+              IgnorePointer(
+                ignoring: _busy || _connection != null,
+                child: Opacity(
+                  opacity: _busy || _connection != null ? 0.5 : 1,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: MenuButton(
+                          label: 'ENTRAR',
+                          onPressed: () => _connect(create: false),
+                          color: AppColors.neonBlue,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: MenuButton(
-                        label: 'CRIAR',
-                        onPressed: () => _connect(create: true),
-                        color: AppColors.amber,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: MenuButton(
+                          label: 'CRIAR',
+                          onPressed: () => _connect(create: true),
+                          color: AppColors.amber,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              )
+            else if (_connection == null && !_busy)
+              MenuButton(
+                label: 'CRIAR SALA',
+                onPressed: () => _connect(create: true),
+                color: AppColors.amber,
               ),
-            ),
             if (_room != null) ...[
               const SizedBox(height: 16),
               Text(switch (_room!.status) {

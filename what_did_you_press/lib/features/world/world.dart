@@ -193,7 +193,7 @@ class _WorldPageState extends State<WorldPage> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'BOMBA ${bomb.id.substring(0, 4).toUpperCase()}',
+                'BOMBA ${bomb.code}',
                 style: TextStyle(color: AppColors.textPrimary),
               ),
             ),
@@ -212,6 +212,13 @@ class _WorldPageState extends State<WorldPage> {
   @override
   Widget build(BuildContext context) {
     final position = _position;
+    final range = radarRangeFor(
+      position == null || _nearby.isEmpty
+          ? null
+          : _nearby
+                .map((b) => b.distanceTo(position.latitude, position.longitude))
+                .reduce((a, b) => a < b ? a : b),
+    );
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -238,10 +245,12 @@ class _WorldPageState extends State<WorldPage> {
                 lat: position.latitude,
                 lng: position.longitude,
                 bombs: _nearby,
+                rangeMeters: range,
               ),
               const SizedBox(height: 8),
               Text(
-                'Raio de 500 m · precisão ±${position.accuracy.round()} m',
+                'Raio de ${_formatDistance(range)} · '
+                'precisão ±${position.accuracy.round()} m',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textDim, fontSize: 12),
               ),

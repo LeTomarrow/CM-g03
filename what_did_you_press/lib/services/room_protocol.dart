@@ -3,12 +3,22 @@ import 'dart:convert';
 /// Small versioned protocol carried only by a reliable, ordered DataChannel.
 /// Only the host publishes state; guests request actions and acknowledge start.
 class RoomMessage {
-  const RoomMessage(this.session, this.type, this.revision, this.hostRole);
+  const RoomMessage(
+    this.session,
+    this.type,
+    this.revision,
+    this.hostRole, {
+    this.locked = false,
+  });
 
   final String session;
   final String type;
   final int revision;
   final String hostRole;
+
+  /// Host-only roles (e.g. the operator of an open-world bomb). Optional on
+  /// the wire, so older peers simply ignore it.
+  final bool locked;
 
   static const types = {
     'hello',
@@ -26,6 +36,7 @@ class RoomMessage {
     'type': type,
     'revision': revision,
     'hostRole': hostRole,
+    if (locked) 'locked': true,
   });
 
   static RoomMessage decode(String text, String session) {
@@ -45,6 +56,7 @@ class RoomMessage {
       data['type'],
       data['revision'],
       data['hostRole'],
+      locked: data['locked'] == true,
     );
   }
 }
@@ -59,15 +71,18 @@ class RoomProtocol {
   String hostRole = 'defuser';
   String phase = 'waiting';
 
+  /// Set by the host before connecting; guests learn it from host state.
+  bool locked = false;
+
   RoomMessage message(String type) =>
-      RoomMessage(session, type, revision, hostRole);
+      RoomMessage(session, type, revision, hostRole, locked: locked);
 
   void connected() {
     if (phase == 'waiting') phase = 'ready';
   }
 
   void swap() {
-    if (!isHost || !{'waiting', 'ready'}.contains(phase)) {
+    if (!isHost || locked || !{'waiting', 'ready'}.contains(phase)) {
       throw StateError('Roles cannot change now');
     }
     hostRole = hostRole == 'defuser' ? 'manual' : 'defuser';
@@ -116,6 +131,7 @@ class RoomProtocol {
     }
     revision = message.revision;
     hostRole = message.hostRole;
+    locked = message.locked;
     phase = message.type == 'prepare' ? 'starting' : 'ready';
     return true;
   }

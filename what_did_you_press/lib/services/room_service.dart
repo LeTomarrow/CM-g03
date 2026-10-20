@@ -24,6 +24,7 @@ class Room {
     required this.status,
     required this.expiresAt,
     required this.hostRole,
+    this.rolesLocked = false,
   });
   final String id;
   final String code;
@@ -32,6 +33,9 @@ class Room {
   final String status;
   final DateTime expiresAt;
   final PlayerRole hostRole;
+
+  /// The host keeps its role, as the operator of an open-world bomb.
+  final bool rolesLocked;
 
   PlayerRole roleFor(String uid) {
     if (uid == hostUid) return hostRole;
@@ -185,7 +189,8 @@ class RoomService {
     _hostUid = host;
     _guestUid = guest;
     _expiresAt = expiry;
-    _protocol = RoomProtocol(session: session, isHost: _isHost);
+    _protocol = RoomProtocol(session: session, isHost: _isHost)
+      ..locked = _isHost && rolesLocked;
     _emit();
     try {
       // For arbitrary networks configure a TURN relay; STUN alone is best effort.
@@ -354,7 +359,7 @@ class RoomService {
           if (protocol.phase == 'ready') _send('state');
         case 'swap':
           if (protocol.phase != 'ready') return;
-          if (message.revision == protocol.revision && !rolesLocked) {
+          if (message.revision == protocol.revision && !protocol.locked) {
             protocol.swap();
           }
           _send('state');
@@ -388,7 +393,9 @@ class RoomService {
 
   Future<void> switchRoles(String roomId) async {
     _checkSession(roomId);
-    if (rolesLocked) throw _error('Os papéis estão fixos nesta sala.');
+    if (_protocol!.locked) {
+      throw _error('Os papéis estão fixos nesta sala.');
+    }
     if (_isHost) {
       _protocol!.swap();
       if (_connected) _send('state');
@@ -469,6 +476,7 @@ class RoomService {
       guestUid: _guestUid,
       status: _protocol!.phase,
       expiresAt: _expiresAt!,
+      rolesLocked: _protocol!.locked,
       hostRole: _protocol!.hostRole == 'manual'
           ? PlayerRole.manual
           : PlayerRole.defuser,

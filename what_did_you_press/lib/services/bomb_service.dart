@@ -57,6 +57,22 @@ class Bomb {
 
   bool isLive(DateTime now) => active && expiresAt.isAfter(now);
 
+  /// Short, stable name shown to players. IDs are `{uid}_{slot}`, so a plain
+  /// prefix would repeat across one player's bombs; hash the whole ID instead.
+  String get code {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    // Stays below 2^53, so web (JS numbers) and native agree.
+    var hash = 7;
+    for (final unit in id.codeUnits) {
+      hash = (hash * 31 + unit) & 0x3fffffff;
+    }
+    // Spread the last characters (the slot) over every output letter.
+    for (var round = 0; round < 3; round++) {
+      hash = ((hash >> 13) ^ (hash * 0x5bd1)) & 0x3fffffff;
+    }
+    return List.generate(4, (i) => alphabet[(hash >> (i * 5)) & 31]).join();
+  }
+
   bool isLeased(DateTime now) {
     return status == 'claimed' && claimExpiresAt!.isAfter(now);
   }

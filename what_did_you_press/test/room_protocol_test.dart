@@ -75,4 +75,15 @@ void main() {
       );
     },
   );
+
+  test('locked roles reach the guest and block host swaps', () {
+    final host = RoomProtocol(session: 'abc', isHost: true)..locked = true;
+    final guest = RoomProtocol(session: 'abc', isHost: false);
+    host.connected();
+    expect(() => host.swap(), throwsStateError);
+    final wire = RoomMessage.decode(host.message('state').encode(), 'abc');
+    expect(guest.apply(wire), isTrue);
+    expect(guest.locked, isTrue);
+    expect(guest.hostRole, 'defuser');
+  });
 }
