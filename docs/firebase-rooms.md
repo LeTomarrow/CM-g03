@@ -1,77 +1,178 @@
-# Firebase rooms
+# Rooms: Firestore signaling and client protocol
 
-For installation, emulator setup, deployment, and logs, see
-[Firebase setup](firebase-setup.md). Every developer should start there.
+Room logic now lives in Dart. There are no Cloud Functions or callable
+endpoints. Firestore is a mailbox used to find a peer and exchange WebRTC
+connection information. After connection, lobby messages use a reliable,
+ordered WebRTC DataChannel named `room-v1`.
 
-## Room API
+## Responsibilities
 
-Functions run in `europe-west1` (Belgium). A room has one host and one guest.
-The six-digit code is also its document ID in `rooms`. Joining is atomic and
-repeatable for existing members while the room is open. Only the host can delete a room. Joins are
-rejected after one hour; expiry does not delete the document automatically.
+- `services/room_service.dart`: anonymous sign-in, code reservation/claim,
+  Firestore signaling, WebRTC transport, cleanup, and the existing lobby API.
+- `services/room_protocol.dart`: small, testable client state machine and JSON
+  format. The host coordinates decisions; it need not be the operator.
+- `features/lobby.dart`: displays the service stream and sends user actions.
+- `firestore.rules`: permits only valid membership and signaling writes.
+
+The host creates a random six-digit code with a transaction that checks for
+collisions. A guest claims the empty guest slot in another transaction. Two
+simultaneous guests cannot both claim it. A 128-bit random `session` identifies
+that particular connection even if a code is reused later. Both clients sign
+in anonymously; use separate browser profiles/private windows to test them.
+
+## Firestore document
+
+```text
+rooms/{sixDigitCode}
+  version: 1
+  session: random 32-character hexadecimal string
+  hostUid: creator's authenticated UID
+  guestUid: null, then the admitted guest's UID
+  createdAt: server timestamp
+  expiresAt: timestamp, approximately one hour later
+  offer: null, then { type: "offer", sdp: "..." }
+  answer: null, then { type: "answer", sdp: "..." }
+  hostCandidates: [ { candidate, sdpMid, sdpMLineIndex }, ... ]
+  guestCandidates: [ { candidate, sdpMid, sdpMLineIndex }, ... ]
+```
+
+These fields describe discovery and signaling, not gameplay. There is no
+Firestore `hostRole`, `status`, game timer, puzzle state or start endpoint.
+Candidates live inside the document (at most 128 per peer), so deleting the
+room does not leave orphan candidate subcollections. SDP is limited to 64 KiB.
+
+The host creates the DataChannel and offer. The guest applies the offer and
+publishes an answer. Both apply the other peer's ICE candidates only after
+setting their remote description. Snapshot processing is serialized so an
+offer cannot be applied twice while an async operation is in progress.
+
+Exact document reads are allowed to authenticated users who know/guess the
+code; this is necessary for joining and collision checking. Collection listing
+is denied. The six-digit code is an invitation, not a strong secret. Do not
+store private gameplay/profile data here. Rules enforce immutable identity and
+session, one guest, one SDP per sender, and append-only own ICE candidates.
+Only the host can delete the document. Expired rooms reject joins/signaling;
+there is no background cleanup job. Existing pre-migration rooms are not valid
+version-1 signaling documents; create a new room after upgrading both clients.
+
+## Local room state
+
+`watchRoom()` now emits local room state, combining admitted member IDs and
+peer messages. The lobby can keep using the same subscription API:
 
 ```dart
-final rooms = RoomService(); // import services/room_service.dart
-final created = await rooms.createRoom(); // signs in anonymously if needed
-print(created.code); // show this to the other player
-
-// On the other device:
-final joined = await rooms.joinRoom('123456'); // use the actual displayed code
-final subscription = rooms.watchRoom(joined.roomId).listen(
-  (room) {
-    // Render room.guestUid / room.status; null means the room is gone.
-  },
-  onError: (Object error) {
-    // A deleted room can cause permission-denied because membership vanished.
-    // Handle closure and other connectivity errors in the lobby.
-  },
+final rooms = RoomService();
+final connection = await rooms.createRoom(); // guest uses joinRoom(code)
+final subscription = rooms.watchRoom(connection.roomId).listen(
+  (room) { /* display role and connection state */ },
+  onError: (Object error) { /* display error / allow a new connection */ },
 );
-// Cancel the subscription when leaving the session.
-await subscription.cancel();
-
-// On the host device:
-await rooms.deleteRoom(created.roomId);
 ```
 
-Catch `FirebaseFunctionsException` around operations and show a suitable UI
-message for `not-found`, `failed-precondition`, `permission-denied`, and
-`unauthenticated`. Invalid local codes throw `ArgumentError`. Auth and network
-errors also propagate to the caller. Keep the same service instance per app.
+Phases are `waiting → ready → starting → playing`, or `closed` on failure.
+A claimed guest slot does not mean ready: the DataChannel must actually open.
+A host may choose its role while waiting. Once connected, either player can
+request a swap; only the host changes canonical state. The guest's role is
+always the opposite of `hostRole`, so the roles cannot accidentally match.
 
-The lobby's CRIAR button calls createRoom and displays the returned six-digit
-code. ENTRAR joins by code. A Firestore listener updates both player slots.
-Loading and errors are shown in the lobby; repeated create/join clicks are
-blocked while a request is running or a room is active.
+## DataChannel protocol, version 1
 
-Either member can press TROCAR PAPÉIS before start. `switchRoles(roomId)`
-transactionally toggles `hostRole` (`defuser` or `manual`); the guest always
-has the opposite role. Both screens display the stored roles and mark the
-local player with `(tu)`. Older rooms without hostRole default to host=defuser.
+Every message is UTF-8 JSON (maximum 2 KiB):
 
-Only the host can press COMEÇAR, and both players must be in the room.
-`startGame(roomId)` atomically changes `ready` to `playing` and sets startedAt.
-This closes the room to new joins, including repeat joins by members, and
-freezes the roles. The document is retained so both listeners receive the
-start event and navigate once to their assigned screen; it is not deleted.
-Repeated host start requests are safe and preserve the original start time.
+```json
+{
+  "version": 1,
+  "session": "0123456789abcdef0123456789abcdef",
+  "type": "state",
+  "revision": 2,
+  "hostRole": "manual"
+}
+```
 
-Guest leaving, WebRTC signaling and gameplay synchronization are not yet
-implemented. Shared lobby start opens each phone's local game; it does not
-synchronize puzzles or timers. Leaving the lobby cancels its listener but does
-not delete the room or free a guest slot. `ready` means both slots are occupied.
-Rebuild Functions before using the new endpoints in the emulator; for live
-Firebase, deploy the updated Functions first.
+`hostRole` is `defuser` or `manual`. Only the host increments `revision` and
+publishes authoritative state. Sender identity comes from the established
+peer connection, never a UID supplied in a message. Invalid versions, roles,
+sessions, message types and stale states are ignored/rejected.
 
-## Backend integration checks
+| Type | Sender → receiver | Meaning |
+| --- | --- | --- |
+| `hello` | guest → host | DataChannel is open; send current roles |
+| `state` | host → guest | Apply current revision and roles; lobby is ready |
+| `swap` | guest → host | Request a swap of the revision the guest has seen |
+| `prepare` | host → guest | Freeze these roles and prepare to start |
+| `ack` | guest → host | Confirm this exact prepared revision and role |
+| `start` | host → guest | Enter the game with those prepared roles |
+| `closed` | either → other | Session is ending |
 
-Run from the repository root:
+For a host swap, the host changes its local role, increments revision and sends
+`state`. For a guest swap, the guest sends `swap`; the host applies it only if
+its revision matches and then broadcasts `state`. This avoids replaying stale
+swap requests. Role changes cannot be applied while starting or playing.
+
+## Start and deletion
+
+1. Host presses COMEÇAR. A connected guest is required.
+2. Host freezes the roles, increments revision and sends `prepare`.
+3. Guest stores the prepared roles, detaches its Firestore listener and sends
+   `ack` for that revision. It does not enter the game yet.
+4. Host waits up to 10 seconds for matching `ack`, detaches its listener and
+   deletes the Firestore signaling document with a session-checked transaction.
+5. Host sends `start`. Both enter the screen corresponding to their local role.
+
+Deleting a room by itself never means start. Only a valid `start` following
+`prepare` does. If acknowledgement/deletion fails, the host reports failure
+and restores lobby state. The guest times out if start never arrives. As with
+any two-device protocol, a broken connection during the final exchange may
+leave one device ahead; failures require a new room rather than claiming both
+started successfully.
+
+The DataChannel is retained while the game screen is active and closed when
+that route is disposed. Closing a host lobby removes its mailbox; leaving as a
+guest notifies the host and ends the peer session. Guest slots are not recycled
+in place: create a fresh room to avoid mixing old SDP and ICE with a new peer.
+Network failure is reported; automatic ICE restart/reconnection is not included.
+
+## Current scope
+
+Create, join, close/delete, shared role changes, host-only shared start and
+signaling cleanup are implemented. The existing puzzle/timer screens still
+run local game logic. This migration does not add voice tracks or synchronize
+puzzle events, timers, drawings or results. Those are future protocols on the
+peer transport, not reasons to add Firestore gameplay writes.
+
+STUN helps find routes; TURN is needed when direct connectivity fails. The app
+accepts `WEBRTC_STUN_URL` (defaults to Google's public STUN), `WEBRTC_TURN_URL`,
+`WEBRTC_TURN_USERNAME`, and `WEBRTC_TURN_CREDENTIAL` as Dart defines. No TURN
+service is provisioned. Use only temporary/scoped TURN credentials for testing;
+Dart defines are compiled into the app and cannot hide provider secrets.
+Firestore/Auth can run on Spark within quotas; TURN is a separate service.
+
+## Checks
+
+Dart protocol/game tests, from `what_did_you_press/`:
 
 ```bash
-npm --prefix functions run build
-firebase emulators:exec --project demo-wdyp-rooms --only firestore 'node functions/test/rooms.cjs'
+flutter test
+flutter analyze
 ```
 
-This uses an isolated local demo project and checks authentication, concurrent
-joins, repeat joins, expiry, host-only deletion and start, shared role swaps,
-start/swap races, role locking, and join rejection after start. It does not test browser
-network access or the Flutter UI.
+Firestore rule tests, from the repository root:
+
+```bash
+npm --prefix tools/firebase-tests ci
+firebase emulators:exec --project demo-wdyp-signaling --only firestore 'npm --prefix tools/firebase-tests test'
+```
+
+These test claims, unauthorized writes, signaling ownership, expiration,
+protocol revisions, frozen roles and start ordering. Test two real browser
+profiles/devices for network reachability and relay requirements too.
+
+A real-browser smoke entry point is available at
+`what_did_you_press/integration_test/room_web_smoke.dart`. It uses an isolated
+`demo-wdyp-signaling` project with Auth on 9199 and Firestore on 8180. Build
+with `flutter build web --debug --target integration_test/room_web_smoke.dart`,
+serve `build/web` on localhost, and inspect `globalThis.roomSmokeResult` in the
+browser console. It creates two independent Firebase app identities, opens real
+peer connections, swaps roles both ways, starts, and verifies mailbox deletion.
+It is a test entry point, not the normal app. Do not run database-clearing rule
+tests concurrently against the same demo project.

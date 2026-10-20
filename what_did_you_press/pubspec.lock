@@ -73,30 +73,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.7.4"
-  cloud_functions:
-    dependency: "direct main"
-    description:
-      name: cloud_functions
-      sha256: b3729d54f942f46819541410e9569f1c1e48c1bbfc9a4ce4b1c6d1538350cede
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.0"
-  cloud_functions_platform_interface:
-    dependency: transitive
-    description:
-      name: cloud_functions_platform_interface
-      sha256: "376331825ea993d001b2e05fae15ec31d80de1b1f2a25c25840fdf9e5e9aefb7"
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.1.0"
-  cloud_functions_web:
-    dependency: transitive
-    description:
-      name: cloud_functions_web
-      sha256: "0d5a7fd2fe9775d6e29e315da5f2c0525ac95f59082b62ffd93959acbbb91eb4"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.1.14"
   code_assets:
     dependency: transitive
     description:
@@ -121,6 +97,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
+  dart_webrtc:
+    dependency: transitive
+    description:
+      name: dart_webrtc
+      sha256: "078e3c431500147e5cc52b3c6ea41ed538f30c7720cc2467d2186c9251e62716"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.8.2"
   device_info_plus:
     dependency: transitive
     description:
@@ -240,6 +224,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_webrtc:
+    dependency: "direct main"
+    description:
+      name: flutter_webrtc
+      sha256: ebf5ceef2897caae425ed65a38b2961c29d9d9a626159418ed460e1a65038c00
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.6.2+hotfix.4"
   google_fonts:
     dependency: "direct main"
     description:
@@ -328,6 +320,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  logger:
+    dependency: transitive
+    description:
+      name: logger
+      sha256: "2a0dc097e7b01d942475bdd552356db2d0f768b05540bd4b2b53f1840f2239a7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.8.0"
   logging:
     dependency: transitive
     description:
@@ -517,6 +517,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
+  synchronized:
+    dependency: transitive
+    description:
+      name: synchronized
+      sha256: b3d516dbd3757ff2a458735e4f6cbac9ff261f576f6e87bcb17feabb39e657c5
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.5.0"
   term_glyph:
     dependency: transitive
     description:
@@ -581,6 +589,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
+  webrtc_interface:
+    dependency: transitive
+    description:
+      name: webrtc_interface
+      sha256: c6f100eac5057d9a817a60473126f9828c796d42884d498af4f339c97b21014f
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.5.1"
   win32:
     dependency: transitive
     description:
@@ -614,5 +630,5 @@ packages:
     source: hosted
     version: "3.1.4"
 sdks:
-  dart: ">=3.11.3 <4.0.0"
+  dart: ">=3.12.0 <4.0.0"
   flutter: ">=3.41.0"

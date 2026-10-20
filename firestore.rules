@@ -1,12 +1,82 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /rooms/{roomId} {
-      allow get: if request.auth != null
-        && (resource.data.hostUid == request.auth.uid
-          || resource.data.guestUid == request.auth.uid);
-      // Membership changes are validated by callable functions.
-      allow list, create, update, delete: if false;
+    match /rooms/{code} {
+      function signedIn() {
+        return request.auth != null && code.matches('^[0-9]{6}$');
+      }
+      function open() {
+        return resource.data.version == 1
+          && resource.data.expiresAt > request.time;
+      }
+      function description(value, type) {
+        return value is map && value.keys().hasOnly(['type', 'sdp'])
+          && value.type == type && value.sdp is string
+          && value.sdp.size() > 0 && value.sdp.size() <= 65536;
+      }
+      function candidate(value) {
+        return value is map
+          && value.keys().hasOnly(['candidate', 'sdpMid', 'sdpMLineIndex'])
+          && value.candidate is string && value.candidate.size() <= 4096
+          && (value.sdpMid == null || value.sdpMid is string)
+          && (value.sdpMLineIndex == null || value.sdpMLineIndex is int);
+      }
+      function appendCandidate(field) {
+        let before = resource.data[field];
+        let after = request.resource.data[field];
+        return after is list && after.size() <= 128
+          && after.size() == before.size() + 1 && after.hasAll(before)
+          && candidate(after[before.size()]);
+      }
+      // The code is an invitation capability: exact lookup is allowed so a
+      // guest can join and a host can check collisions. Collection listing is not.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'version', 'session', 'hostUid', 'guestUid', 'createdAt', 'expiresAt',
+          'offer', 'answer', 'hostCandidates', 'guestCandidates'
+        ])
+        && request.resource.data.version == 1
+        && request.resource.data.session is string
+        && request.resource.data.session.matches('^[a-f0-9]{32}$')
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.guestUid == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(2, 'h')
+        && request.resource.data.offer == null
+        && request.resource.data.answer == null
+        && request.resource.data.hostCandidates == []
+        && request.resource.data.guestCandidates == [];
+      allow update: if signedIn() && open() && (
+        // Claim exactly one guest slot, without changing any other field.
+        (resource.data.guestUid == null
+          && request.auth.uid != resource.data.hostUid
+          && request.resource.data.guestUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['guestUid']))
+        || (request.auth.uid == resource.data.hostUid && (
+          (resource.data.offer == null
+            && description(request.resource.data.offer, 'offer')
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['offer']))
+          || (appendCandidate('hostCandidates')
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['hostCandidates']))
+        ))
+        || (request.auth.uid == resource.data.guestUid && (
+          (resource.data.answer == null && resource.data.offer != null
+            && description(request.resource.data.answer, 'answer')
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['answer']))
+          || (appendCandidate('guestCandidates')
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['guestCandidates']))
+        ))
+      );
+      allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
     }
   }
 }

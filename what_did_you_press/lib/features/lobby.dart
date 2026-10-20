@@ -11,7 +11,9 @@ import 'package:what_did_you_press/features/game/bomb.dart';
 import 'package:what_did_you_press/features/manual/manual.dart';
 
 class LobbyPage extends StatefulWidget {
-  const LobbyPage({super.key});
+  const LobbyPage({super.key, this.roomServiceFactory});
+
+  final RoomService Function()? roomServiceFactory;
 
   @override
   State<LobbyPage> createState() => _LobbyPageState();
@@ -19,12 +21,15 @@ class LobbyPage extends StatefulWidget {
 
 class _LobbyPageState extends State<LobbyPage> {
   final TextEditingController _codeController = TextEditingController();
-  late final RoomService _rooms = RoomService();
+  late RoomService _rooms = _newRoomService();
+  RoomService _newRoomService() =>
+      widget.roomServiceFactory?.call() ?? RoomService();
   StreamSubscription<Room?>? _roomSubscription;
   RoomConnection? _connection;
   Room? _room;
   bool _busy = false;
   bool _openingGame = false;
+  bool _closureHandled = false;
 
   bool get _isHost => _room != null && _room!.hostUid == _rooms.currentUserId;
   String? _error;
@@ -34,36 +39,47 @@ class _LobbyPageState extends State<LobbyPage> {
     setState(() {
       _busy = true;
       _error = null;
+      _closureHandled = false;
     });
     try {
       await _roomSubscription?.cancel();
       _roomSubscription = null;
+      await _rooms.close();
+      _rooms = _newRoomService();
       final connection = create
           ? await _rooms.createRoom()
           : await _rooms.joinRoom(_codeController.text);
-      if (!mounted) return;
+      if (!mounted) {
+        await _rooms.close();
+        return;
+      }
       setState(() => _connection = connection);
       _roomSubscription = _rooms
           .watchRoom(connection.roomId)
           .listen(
             (room) {
-              if (!mounted) return;
+              if (!mounted || _closureHandled) return;
+              if (room == null || room.status == 'closed') {
+                final isHost = (room ?? _room)?.hostUid == _rooms.currentUserId;
+                _handleRoomClosed(
+                  isHost
+                      ? 'O outro jogador saiu. Cria uma nova sala para continuar.'
+                      : 'O anfitrião encerrou a sala. Podes criar ou entrar noutra sala.',
+                );
+                return;
+              }
               setState(() {
                 _room = room;
-                _error = room == null ? 'A sala foi encerrada.' : null;
-                if (room == null) _connection = null;
+                _error = null;
               });
-              if (room?.status == 'playing') _openGame(room!);
+              if (room.status == 'playing') _openGame(room);
             },
             onError: (Object error) {
-              if (!mounted) return;
+              if (!mounted || _closureHandled) return;
               setState(() {
                 _room = null;
                 _error = _errorMessage(error);
-                if (error is FirebaseException &&
-                    error.code == 'permission-denied') {
-                  _connection = null;
-                }
+                _connection = null;
               });
             },
           );
@@ -74,9 +90,55 @@ class _LobbyPageState extends State<LobbyPage> {
     }
   }
 
+  void _handleRoomClosed(String message) {
+    if (!mounted || _closureHandled || _openingGame) return;
+    _closureHandled = true;
+    final subscription = _roomSubscription;
+    final service = _rooms;
+    _roomSubscription = null;
+    setState(() {
+      _room = null;
+      _connection = null;
+      _busy = false;
+      _error = null;
+      _codeController.clear();
+    });
+    // Reset immediately; cleanup must not delay the remote closure notice.
+    unawaited(subscription?.cancel());
+    unawaited(service.close());
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppColors.card,
+          title: Text(
+            'SALA ENCERRADA',
+            style: TextStyle(color: AppColors.danger),
+          ),
+          content: Text(
+            message,
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'ENTENDIDO',
+                style: TextStyle(color: AppColors.amber),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _errorMessage(Object error) {
     if (error is ArgumentError) return 'Introduz um código de seis dígitos.';
     if (error is FirebaseException) {
+      if (error.plugin == 'room' && error.message != null) {
+        return error.message!;
+      }
       return switch (error.code) {
         'not-found' =>
           'Sala não encontrada. Confirma o código e a configuração.',
@@ -95,8 +157,27 @@ class _LobbyPageState extends State<LobbyPage> {
   @override
   void dispose() {
     _roomSubscription?.cancel();
+    if (!_openingGame) unawaited(_rooms.close());
     _codeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _leaveRoom() async {
+    if (_busy) return;
+    final subscription = _roomSubscription;
+    final service = _rooms;
+    _roomSubscription = null;
+    _closureHandled = true;
+    setState(() {
+      _connection = null;
+      _room = null;
+      _busy = false;
+      _error = null;
+      _codeController.clear();
+    });
+    // Notify/close the peer immediately, without waiting for UI stream teardown.
+    unawaited(subscription?.cancel());
+    await service.close();
   }
 
   Future<void> _startGame() async {
@@ -142,10 +223,12 @@ class _LobbyPageState extends State<LobbyPage> {
     final Widget page = role == PlayerRole.defuser
         ? const BombPage()
         : const ManualPage();
-    // Both players navigate from the committed room update, never a local tap.
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (context) => page));
+    // Acknowledged peer start; keep the DataChannel alive while playing.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => _PeerGame(service: _rooms, child: page),
+      ),
+    );
   }
 
   Widget _buildPlayerSlot(String name, String role, bool isConnected) {
@@ -296,6 +379,30 @@ class _LobbyPageState extends State<LobbyPage> {
                 ),
               ),
             ),
+            if (_room != null) ...[
+              const SizedBox(height: 16),
+              Text(switch (_room!.status) {
+                'ready' => 'LIGAÇÃO ENTRE JOGADORES ESTABELECIDA',
+                'starting' => 'A CONFIRMAR O INÍCIO...',
+                'closed' => 'LIGAÇÃO ENCERRADA',
+                _ =>
+                  _room!.guestUid == null
+                      ? 'À ESPERA DE OUTRO JOGADOR'
+                      : 'A LIGAR AO OUTRO JOGADOR...',
+              }, style: TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 16),
+              IgnorePointer(
+                ignoring: _busy,
+                child: Opacity(
+                  opacity: _busy ? 0.5 : 1,
+                  child: MenuButton(
+                    label: _isHost ? 'ENCERRAR SALA' : 'SAIR DA SALA',
+                    onPressed: _leaveRoom,
+                    color: _isHost ? AppColors.danger : AppColors.metalGrey,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 40),
             IgnorePointer(
               ignoring: _busy || !_isHost || _openingGame,
@@ -315,4 +422,25 @@ class _LobbyPageState extends State<LobbyPage> {
       ),
     );
   }
+}
+
+/// Own the peer session after the lobby route is replaced by the game.
+class _PeerGame extends StatefulWidget {
+  const _PeerGame({required this.service, required this.child});
+  final RoomService service;
+  final Widget child;
+
+  @override
+  State<_PeerGame> createState() => _PeerGameState();
+}
+
+class _PeerGameState extends State<_PeerGame> {
+  @override
+  void dispose() {
+    unawaited(widget.service.close());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
