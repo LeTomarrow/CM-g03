@@ -1,5 +1,10 @@
 # CM-g03
 
+## Firebase
+
+Team setup and local testing: [Firebase setup](docs/firebase-setup.md).
+Room behavior and API: [Firebase rooms](docs/firebase-rooms.md).
+
 
 ## ideias
 
