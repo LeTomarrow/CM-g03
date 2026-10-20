@@ -1,12 +1,164 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Durations mirror the constants in lib/services/room_service.dart and
+    // lib/services/bomb_service.dart. Clients write timestamps with
+    // serverTimestamp(), so request.time is the only clock trusted here.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function hasExactly(data, keys) {
+      return data.keys().hasAll(keys) && data.keys().hasOnly(keys);
+    }
+
+    function roomOpen(room) {
+      return room.createdAt + duration.value(1, 'h') > request.time;
+    }
+
+    function bombLive(bomb) {
+      return bomb.active == true
+        && bomb.createdAt + duration.value(24, 'h') > request.time;
+    }
+
+    function leaseActive(bomb) {
+      return bomb.claimedAt + duration.value(10, 'm') > request.time;
+    }
+
+    function bombAfter(bombId) {
+      return getAfter(/databases/$(database)/documents/bombs/$(bombId)).data;
+    }
+
+    function roomAfter(roomId) {
+      return getAfter(/databases/$(database)/documents/rooms/$(roomId)).data;
+    }
+
     match /rooms/{roomId} {
-      allow get: if request.auth != null
-        && (resource.data.hostUid == request.auth.uid
-          || resource.data.guestUid == request.auth.uid);
-      // Membership changes are validated by callable functions.
-      allow list, create, update, delete: if false;
+      // The six-digit code is a shared secret: anyone signed in can read a
+      // room by code (needed to join it), but nobody can list rooms.
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+        && roomId.matches('[0-9]{6}')
+        && hasExactly(request.resource.data,
+          ['code', 'hostUid', 'guestUid', 'status', 'bombId', 'createdAt'])
+        && request.resource.data.code == roomId
+        && request.resource.data.hostUid == uid()
+        && request.resource.data.guestUid == null
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.createdAt == request.time
+        // A bomb room is created in the same transaction as the claim.
+        && (request.resource.data.bombId == null
+          || (request.resource.data.bombId is string
+            && bombAfter(request.resource.data.bombId).claimedBy == uid()
+            && bombAfter(request.resource.data.bombId).roomId == roomId));
+
+      // Joining takes the empty guest slot of an open room, exactly once.
+      allow update: if signedIn()
+        && resource.data.guestUid == null
+        && resource.data.status == 'waiting'
+        && resource.data.hostUid != uid()
+        && roomOpen(resource.data)
+        && changedKeys().hasOnly(['guestUid', 'status'])
+        && request.resource.data.guestUid == uid()
+        && request.resource.data.status == 'ready';
+
+      allow delete: if signedIn() && resource.data.hostUid == uid();
+    }
+
+    match /bombs/{bombId} {
+      // The open-world map is public to signed-in players.
+      allow get, list: if signedIn();
+      allow delete: if false;
+
+      // Each player owns three slots ({uid}_0..2), which caps live bombs.
+      allow create: if signedIn() && ownSlot() && freshBomb();
+      allow update: if signedIn() && (replant() || claim() || abandon()
+        || resolve());
+
+      function ownSlot() {
+        return bombId.matches(uid() + '_[0-2]');
+      }
+
+      function freshBomb() {
+        let bomb = request.resource.data;
+        return hasExactly(bomb, ['lat', 'lng', 'geohash', 'plantedBy',
+            'status', 'active', 'claimedBy', 'roomId', 'claimedAt',
+            'createdAt'])
+          && bomb.lat is number && bomb.lat >= -90 && bomb.lat <= 90
+          && bomb.lng is number && bomb.lng >= -180 && bomb.lng <= 180
+          && bomb.geohash is string
+          && bomb.geohash.matches('[0-9b-hjkmnp-z]{9}')
+          && bomb.plantedBy == uid()
+          && bomb.status == 'armed'
+          && bomb.active == true
+          && bomb.claimedBy == null
+          && bomb.roomId == null
+          && bomb.claimedAt == null
+          && bomb.createdAt == request.time;
+      }
+
+      // A slot is reused once its bomb is resolved or expired.
+      function replant() {
+        return ownSlot() && !bombLive(resource.data) && freshBomb();
+      }
+
+      // Anyone but the planter may take a free bomb, together with creating
+      // the room that the bomb points to.
+      function claim() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return before.plantedBy != uid()
+          && bombLive(before)
+          && (before.status == 'armed'
+            || (before.status == 'claimed' && !leaseActive(before)))
+          && changedKeys().hasOnly(['status', 'claimedBy', 'roomId',
+            'claimedAt'])
+          && after.status == 'claimed'
+          && after.claimedBy == uid()
+          && after.claimedAt == request.time
+          && after.roomId is string
+          && after.roomId.matches('[0-9]{6}')
+          && roomAfter(after.roomId).hostUid == uid()
+          && roomAfter(after.roomId).bombId == bombId;
+      }
+
+      // An expired lease still counts until another pair claims the bomb.
+      function heldByCaller() {
+        return resource.data.status == 'claimed'
+          && resource.data.claimedBy == uid();
+      }
+
+      function abandon() {
+        let after = request.resource.data;
+        return heldByCaller()
+          && changedKeys().hasOnly(['status', 'claimedBy', 'roomId',
+            'claimedAt'])
+          && after.status == 'armed'
+          && after.claimedBy == null
+          && after.roomId == null
+          && after.claimedAt == null;
+      }
+
+      function resolve() {
+        let after = request.resource.data;
+        return heldByCaller()
+          && changedKeys().hasOnly(['status', 'active', 'resolvedBy',
+            'resolvedAt'])
+          && after.status in ['defused', 'exploded']
+          && after.active == false
+          && after.resolvedBy == uid()
+          && after.resolvedAt == request.time;
+      }
     }
   }
 }

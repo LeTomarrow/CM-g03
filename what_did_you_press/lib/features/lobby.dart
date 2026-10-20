@@ -73,11 +73,16 @@ class _LobbyPageState extends State<LobbyPage> {
 
   String _errorMessage(Object error) {
     if (error is ArgumentError) return 'Introduz um código de seis dígitos.';
+    if (error is RoomException) {
+      return switch (error.reason) {
+        RoomFailure.notFound => 'Sala não encontrada. Confirma o código.',
+        RoomFailure.full => 'A sala está cheia.',
+        RoomFailure.expired => 'A sala expirou. Cria uma nova.',
+        RoomFailure.codeCollision => 'Não foi possível criar a sala.',
+      };
+    }
     if (error is FirebaseException) {
       return switch (error.code) {
-        'not-found' =>
-          'Sala não encontrada. Confirma o código e a configuração.',
-        'failed-precondition' => 'A sala está cheia ou expirou.',
         'permission-denied' => 'A sala foi encerrada ou não tens acesso.',
         'operation-not-allowed' => 'O início de sessão anónimo não está ativo.',
         'unavailable' || 'network-request-failed' =>
@@ -161,6 +166,11 @@ class _LobbyPageState extends State<LobbyPage> {
                     _connection?.code ?? '------',
                     style: TextStyle(color: AppColors.amber, fontSize: 32),
                   ),
+                  if (_room?.bombId != null)
+                    Text(
+                      'BOMBA DO MUNDO',
+                      style: TextStyle(color: AppColors.success),
+                    ),
                 ],
               ),
             ),

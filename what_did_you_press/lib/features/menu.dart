@@ -5,6 +5,7 @@ import 'package:what_did_you_press/features/account.dart';
 import 'package:what_did_you_press/features/configs.dart';
 import 'package:what_did_you_press/features/help.dart';
 import 'package:what_did_you_press/features/lobby.dart';
+import 'package:what_did_you_press/features/world/world.dart';
 
 class MenuPage extends StatelessWidget {
   const MenuPage({super.key});
@@ -63,6 +64,12 @@ class _GamePageState extends State<GamePage> {
                       label: 'JOGAR',
                       onPressed: () => navegation(LobbyPage()),
                       color: AppColors.neonBlue,
+                    ),
+                    const SizedBox(height: 16),
+                    MenuButton(
+                      label: 'MUNDO',
+                      onPressed: () => navegation(WorldPage()),
+                      color: AppColors.danger,
                     ),
                     const SizedBox(height: 16),
                     MenuButton(

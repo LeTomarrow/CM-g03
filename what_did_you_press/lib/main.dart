@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -12,11 +11,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Local development defaults to emulators. Override the host for a phone.
-  const useEmulators = bool.fromEnvironment(
-    'USE_FIREBASE_EMULATORS',
-    defaultValue: true,
-  );
+  // Uses the live project by default; pass
+  // --dart-define=USE_FIREBASE_EMULATORS=true for local emulators.
+  const useEmulators = bool.fromEnvironment('USE_FIREBASE_EMULATORS');
   if (useEmulators) {
     final defaultHost =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android
@@ -25,9 +22,6 @@ Future<void> main() async {
     const configuredHost = String.fromEnvironment('FIREBASE_EMULATOR_HOST');
     final host = configuredHost.isEmpty ? defaultHost : configuredHost;
     await FirebaseAuth.instance.useAuthEmulator(host, 9099);
-    FirebaseFunctions.instanceFor(
-      region: 'europe-west1',
-    ).useFunctionsEmulator(host, 5001);
     FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
   }
 

@@ -5,10 +5,13 @@ For installation, emulator setup, deployment, and logs, see
 
 ## Room API
 
-Functions run in `europe-west1` (Belgium). A room has one host and one guest.
-The six-digit code is also its document ID in `rooms`. Joining is atomic and
-repeatable for existing members. Only the host can delete a room. Joins are
-rejected after one hour; expiry does not delete the document automatically.
+There are no Cloud Functions (the project stays on the free Spark plan). The
+app writes to Firestore in transactions and `firestore.rules` enforces every
+invariant, using only server timestamps. A room has one host and one guest.
+The six-digit code is also its document ID in `rooms`; anyone signed in can
+read a room by code, nobody can list them. Joining is atomic and repeatable
+for existing members. Only the host can delete a room. Joins are rejected
+after one hour; expiry does not delete the document automatically.
 
 ```dart
 final rooms = RoomService(); // import services/room_service.dart
@@ -22,8 +25,7 @@ final subscription = rooms.watchRoom(joined.roomId).listen(
     // Render room.guestUid / room.status; null means the room is gone.
   },
   onError: (Object error) {
-    // A deleted room can cause permission-denied because membership vanished.
-    // Handle closure and other connectivity errors in the lobby.
+    // Handle connectivity errors in the lobby.
   },
 );
 // Cancel the subscription when leaving the session.
@@ -33,10 +35,10 @@ await subscription.cancel();
 await rooms.deleteRoom(created.roomId);
 ```
 
-Catch `FirebaseFunctionsException` around operations and show a suitable UI
-message for `not-found`, `failed-precondition`, `permission-denied`, and
-`unauthenticated`. Invalid local codes throw `ArgumentError`. Auth and network
-errors also propagate to the caller. Keep the same service instance per app.
+Expected failures throw `RoomException` (`notFound`, `full`, `expired`).
+A write the rules reject throws `FirebaseException` with `permission-denied`.
+Invalid local codes throw `ArgumentError`. Auth and network errors also
+propagate to the caller.
 
 The lobby's CRIAR button calls createRoom and displays the returned six-digit
 code. ENTRAR joins by code. A Firestore listener updates both player slots.
@@ -48,15 +50,29 @@ signaling and game synchronization are not implemented. Leaving the lobby
 cancels its listener but does not delete the room or free a guest slot.
 `ready` only means that both room slots are occupied.
 
-## Backend integration checks
+## Open-world bombs
+
+The MUNDO screen (`features/world/`) uses `BombService`. `plantBomb` stores a
+bomb at the caller's GPS position for 24 hours in one of three slots per
+player (`bombs/{uid}_0..2`), which caps live bombs. `claimBomb` locks the bomb
+for 10 minutes and, in the same transaction, creates a normal room (with
+`bombId`) hosted by the operator; the manual joins it with the code through
+the lobby. `resolveBomb` records `defused`, `exploded` or `abandoned`
+(re-arms it); only the claimer may do so. The 50 m claim radius is checked
+only on the client, since the rules cannot see GPS. Expected failures throw
+`BombException`. Nearby bombs are read with geohash range queries, which need
+the index in `firestore.indexes.json`.
+
+## Security rules checks
 
 Run from the repository root:
 
 ```bash
-npm --prefix functions run build
-firebase emulators:exec --project demo-wdyp-rooms --only firestore 'node functions/test/rooms.cjs'
+npm --prefix tests/firestore-rules ci
+firebase emulators:exec --project demo-wdyp-rules --only firestore 'npm --prefix tests/firestore-rules test'
 ```
 
-This uses an isolated local demo project and checks authentication, concurrent
-joins, repeat joins, expiry, and host-only deletion. It does not test browser
-network access or the Flutter UI.
+This uses an isolated local demo project. Each test repeats the writes the
+services make and checks what the rules allow: room creation and joining,
+expiry, host-only deletion, bomb slots, claims, leases and resolution. It
+does not test the Flutter UI.

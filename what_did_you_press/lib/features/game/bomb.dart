@@ -12,7 +12,10 @@ import 'package:what_did_you_press/features/game/modules/symbols_module.dart';
 import 'package:what_did_you_press/features/game/result.dart';
 
 class BombPage extends StatefulWidget {
-  const BombPage({super.key});
+  const BombPage({super.key, this.onFinished});
+
+  /// Called once with `true` if defused; this page is gone by then.
+  final void Function(bool defused)? onFinished;
 
   @override
   State<BombPage> createState() => _BombPageState();
@@ -47,6 +50,7 @@ class _BombPageState extends State<BombPage> {
 
   void _endGame(bool defused) {
     _timer?.cancel();
+    widget.onFinished?.call(defused);
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => ResultPage(

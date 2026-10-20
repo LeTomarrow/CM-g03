@@ -3,27 +3,50 @@ import {randomInt} from "node:crypto";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 
+export const ROOM_CREATE_ATTEMPTS = 10;
+
+/**
+ * Picks a candidate room code; callers must check that it is unused.
+ * @return {string} Six-digit code, also used as the document ID.
+ */
+export function randomRoomCode(): string {
+  return randomInt(100000, 1000000).toString();
+}
+
+/**
+ * Builds a new waiting room document.
+ * @param {string} code Six-digit room code.
+ * @param {string} hostUid Creator of the room.
+ * @param {string | null} bombId Open-world bomb the room plays, if any.
+ * @return {object} Firestore document data.
+ */
+export function newRoomData(code: string, hostUid: string,
+  bombId: string | null = null) {
+  const now = Timestamp.now();
+  return {
+    code,
+    hostUid,
+    guestUid: null,
+    status: "waiting",
+    bombId,
+    createdAt: now,
+    expiresAt: Timestamp.fromMillis(now.toMillis() + 60 * 60 * 1000),
+  };
+}
+
 export const createRoom = onCall({region: "europe-west1"}, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Sign in first.");
   }
   const uid = request.auth.uid;
   const db = getFirestore();
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const code = randomInt(100000, 1000000).toString();
+  for (let attempt = 0; attempt < ROOM_CREATE_ATTEMPTS; attempt++) {
+    const code = randomRoomCode();
     const ref = db.collection("rooms").doc(code);
     const created = await db.runTransaction(async (transaction) => {
       const existing = await transaction.get(ref);
       if (existing.exists) return false;
-      const now = Timestamp.now();
-      transaction.create(ref, {
-        code,
-        hostUid: uid,
-        guestUid: null,
-        status: "waiting",
-        createdAt: now,
-        expiresAt: Timestamp.fromMillis(now.toMillis() + 60 * 60 * 1000),
-      });
+      transaction.create(ref, newRoomData(code, uid));
       return true;
     });
     if (created) {
