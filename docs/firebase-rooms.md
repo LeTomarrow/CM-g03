@@ -1,6 +1,6 @@
 # Firebase rooms
 
-For installation, emulator setup, deployment, logs, and what to commit, see
+For installation, emulator setup, deployment, and logs, see
 [Firebase setup](firebase-setup.md). Every developer should start there.
 
 ## Room API

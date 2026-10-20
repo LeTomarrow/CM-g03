@@ -4,40 +4,6 @@ The team shares the Firebase project `what-did-you-press`. Each developer runs
 their own local emulators. **The app currently uses emulators by default**;
 starting Flutter alone is not enough to create rooms.
 
-## What goes in Git
-
-| Commit | Purpose |
-| --- | --- |
-| Root `firebase.json` | Functions, rules, emulator ports and deployment configuration |
-| `firestore.rules`, `firestore.indexes.json` | Shared database access policy and indexes |
-| `functions/src/`, package manifests and lockfile | Backend source and reproducible dependencies |
-| `what_did_you_press/firebase.json` | FlutterFire platform mappings |
-| `what_did_you_press/lib/firebase_options.dart` | Shared client project configuration |
-| `what_did_you_press/android/app/google-services.json` | Android Firebase client configuration |
-| `GoogleService-Info.plist` if iOS is added | Apple Firebase client configuration |
-| Flutter `pubspec.yaml` and `pubspec.lock` | Client dependencies |
-| `.firebaserc` if added | Project aliases; project IDs are not secrets |
-
-Firebase client API keys and app IDs identify the project; they do not grant
-Admin SDK access. This team keeps those files committed so every clone points
-to the same project. Access is enforced by Authentication, Firestore rules and
-backend authorization, not by hiding client configuration. See
-[Firebase API keys](https://firebase.google.com/docs/projects/api-keys).
-
-Ignore logs, `.firebase/`, emulator exports, `node_modules/`, compiled Functions
-output, Flutter build output, local `.env` files and `.secret.local`. The ignore
-files cover these. Use the ignored `emulator-data/` directory for local exports.
-An `.env.example` may contain placeholder values and can be committed.
-
-Never commit service account private keys, CLI login tokens, signing keys or
-TURN/provider secrets. Common credential filenames are ignored as a safeguard;
-arbitrarily named credentials still need review. No service account key is
-needed for the local emulator workflow. For live Functions, use runtime
-credentials and Secret Manager for future backend secrets. See the
-[Firebase security checklist](https://firebase.google.com/support/guides/security-checklist).
-Ignoring an already tracked file does not remove it from Git or its history.
-If a private key was committed, revoke it; adding an ignore rule is insufficient.
-
 ## Install once on each development machine
 
 Install Flutter/Dart, Node.js **24** (matching `functions/package.json`), npm,
@@ -55,7 +21,7 @@ cd what_did_you_press
 flutter pub get
 ```
 
-Keep the committed Firebase configuration. **Do not run `firebase init` on each
+Use the Firebase configuration included in the repository. **Do not run `firebase init` on each
 clone**, create a new Firebase project, or download an Admin SDK key.
 Local emulators do not require project membership or billing. Log in with your
 own account (`firebase login`) when accessing the shared live project.
@@ -109,58 +75,6 @@ Fully stop/restart Flutter and refresh the page after changing startup config.
 Emulator state is temporary unless exported, for example with
 `firebase emulators:export emulator-data --project what-did-you-press` while
 running. Restore it with `--import=emulator-data` on the emulator start command.
-
-## Configure a new platform or a different project
-
-This is not needed for an ordinary clone. Run it when intentionally changing
-the registered platforms or project:
-
-```bash
-dart pub global activate flutterfire_cli
-firebase login
-cd what_did_you_press
-flutterfire configure --project what-did-you-press
-```
-
-Run `cd` from the repository root. In Fish, make the CLI available with
-`fish_add_path $HOME/.pub-cache/bin`. In Bash, add
-`export PATH="$PATH:$HOME/.pub-cache/bin"` to `~/.bashrc` and reload it.
-
-Android is for phones/emulators; web is for browser tests; Windows is only
-needed for Windows desktop tests. Current web and Windows options share a
-Firebase web registration. Review generated changes before committing them.
-`main.dart` already initializes Firebase; do not paste another initialization.
-
-## Shared live project: set up once, not per developer
-
-A project maintainer invites teammates using **Project settings → Users and
-permissions**. Each teammate uses their own Google account.
-
-In the shared Firebase console, enable **Authentication → Anonymous**, and
-create a **Standard Cloud Firestore** database with ID **`(default)`**. Choose
-a European location such as `europe-west1` (Belgium) or `eur3` (Europe).
-Database location is independent of Functions and cannot be changed in place.
-Room functions and the Dart caller use **`europe-west1`**.
-
-Deploying Cloud Functions requires the **Blaze billing plan**. Without it,
-continue with local emulators. A maintainer with deployment permissions can
-deploy from **`CM-g03/`**, using the root backend `firebase.json`:
-
-```bash
-firebase deploy --project what-did-you-press --only functions,firestore:rules,firestore:indexes
-```
-
-The nested Flutter `firebase.json` has no deployment targets. Once deployment
-succeeds, explicitly switch a client to live Firebase:
-
-```bash
-flutter run -d web-server --web-port 8085 --dart-define=USE_FIREBASE_EMULATORS=false
-```
-
-Check live documents under **Firebase Console → Firestore Database → Data →
-rooms**. The collection is created by the first successful create operation.
-Do not open database access rules to troubleshoot; the functions use the Admin
-SDK and validate writes, while room reads require membership.
 
 ## Logs and troubleshooting
 
