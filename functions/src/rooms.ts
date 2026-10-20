@@ -21,6 +21,7 @@ export const createRoom = onCall({region: "europe-west1"}, async (request) => {
         hostUid: uid,
         guestUid: null,
         status: "waiting",
+        hostRole: "defuser",
         createdAt: now,
         expiresAt: Timestamp.fromMillis(now.toMillis() + 60 * 60 * 1000),
       });
@@ -50,6 +51,9 @@ export const joinRoom = onCall({region: "europe-west1"}, async (request) => {
     if (!room) throw new HttpsError("not-found", "Room not found.");
     if (room.expiresAt.toMillis() <= Date.now()) {
       throw new HttpsError("failed-precondition", "Room expired.");
+    }
+    if (room.status === "playing") {
+      throw new HttpsError("failed-precondition", "Game already started.");
     }
     // Joining again with the same identity is safe.
     if (room.hostUid === uid || room.guestUid === uid) return;
@@ -82,4 +86,66 @@ export const deleteRoom = onCall({region: "europe-west1"}, async (request) => {
   });
   info("Room deletion completed", {operation: "deleteRoom"});
   return {deleted: true};
+});
+
+// Keep the document so both listeners receive the start and final roles.
+// A playing room is closed to all join requests, including existing members.
+export const startGame = onCall({region: "europe-west1"}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in first.");
+  }
+  const uid = request.auth.uid;
+  const roomId = request.data?.roomId;
+  if (typeof roomId !== "string" || !/^\d{6}$/.test(roomId)) {
+    throw new HttpsError("invalid-argument", "Invalid room ID.");
+  }
+  const ref = getFirestore().collection("rooms").doc(roomId);
+  await getFirestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const room = snapshot.data();
+    if (!room) throw new HttpsError("not-found", "Room not found.");
+    if (room.hostUid !== uid) {
+      throw new HttpsError("permission-denied", "Only the host can start.");
+    }
+    // A retried start must not change the original start time.
+    if (room.status === "playing") return;
+    if (room.expiresAt.toMillis() <= Date.now() ||
+        room.status !== "ready" || !room.guestUid) {
+      throw new HttpsError("failed-precondition", "Room is not ready.");
+    }
+    transaction.update(ref, {
+      status: "playing",
+      startedAt: Timestamp.now(),
+    });
+  });
+  info("Game started; room closed to joins", {operation: "startGame"});
+  return {started: true};
+});
+
+export const switchRoles = onCall({region: "europe-west1"}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in first.");
+  }
+  const uid = request.auth.uid;
+  const roomId = request.data?.roomId;
+  if (typeof roomId !== "string" || !/^\d{6}$/.test(roomId)) {
+    throw new HttpsError("invalid-argument", "Invalid room ID.");
+  }
+  const ref = getFirestore().collection("rooms").doc(roomId);
+  await getFirestore().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const room = snapshot.data();
+    if (!room) throw new HttpsError("not-found", "Room not found.");
+    if (room.hostUid !== uid && room.guestUid !== uid) {
+      throw new HttpsError("permission-denied", "Only members can swap roles.");
+    }
+    if (room.expiresAt.toMillis() <= Date.now() ||
+        !["waiting", "ready"].includes(room.status)) {
+      throw new HttpsError("failed-precondition", "Room is no longer open.");
+    }
+    transaction.update(ref, {
+      hostRole: room.hostRole === "manual" ? "defuser" : "manual",
+    });
+  });
+  return {switched: true};
 });

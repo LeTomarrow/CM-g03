@@ -19,12 +19,14 @@ class LobbyPage extends StatefulWidget {
 
 class _LobbyPageState extends State<LobbyPage> {
   final TextEditingController _codeController = TextEditingController();
-  PlayerRole _role = PlayerRole.defuser;
   late final RoomService _rooms = RoomService();
   StreamSubscription<Room?>? _roomSubscription;
   RoomConnection? _connection;
   Room? _room;
   bool _busy = false;
+  bool _openingGame = false;
+
+  bool get _isHost => _room != null && _room!.hostUid == _rooms.currentUserId;
   String? _error;
 
   Future<void> _connect({required bool create}) async {
@@ -51,6 +53,7 @@ class _LobbyPageState extends State<LobbyPage> {
                 _error = room == null ? 'A sala foi encerrada.' : null;
                 if (room == null) _connection = null;
               });
+              if (room?.status == 'playing') _openGame(room!);
             },
             onError: (Object error) {
               if (!mounted) return;
@@ -77,7 +80,7 @@ class _LobbyPageState extends State<LobbyPage> {
       return switch (error.code) {
         'not-found' =>
           'Sala não encontrada. Confirma o código e a configuração.',
-        'failed-precondition' => 'A sala está cheia ou expirou.',
+        'failed-precondition' => 'A sala não está disponível para esta ação.',
         'permission-denied' => 'A sala foi encerrada ou não tens acesso.',
         'operation-not-allowed' => 'O início de sessão anónimo não está ativo.',
         'unavailable' || 'network-request-failed' =>
@@ -96,7 +99,8 @@ class _LobbyPageState extends State<LobbyPage> {
     super.dispose();
   }
 
-  void _startGame() {
+  Future<void> _startGame() async {
+    if (_busy || _openingGame) return;
     if (_room?.status != 'ready') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -105,10 +109,43 @@ class _LobbyPageState extends State<LobbyPage> {
       );
       return;
     }
-    final Widget page = _role == PlayerRole.defuser
+    if (!_isHost) return;
+    await _changeRoom(() => _rooms.startGame(_room!.id));
+  }
+
+  Future<void> _switchRoles() async {
+    final room = _room;
+    if (_busy || room == null || room.status == 'playing') return;
+    await _changeRoom(() => _rooms.switchRoles(room.id));
+  }
+
+  Future<void> _changeRoom(Future<void> Function() operation) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await operation();
+    } catch (error) {
+      if (mounted) setState(() => _error = _errorMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _openGame(Room room) {
+    if (_openingGame) return;
+    final uid = _rooms.currentUserId;
+    if (uid == null || (uid != room.hostUid && uid != room.guestUid)) return;
+    _openingGame = true;
+    final role = room.roleFor(uid);
+    final Widget page = role == PlayerRole.defuser
         ? const BombPage()
         : const ManualPage();
-    Navigator.of(context).push(MaterialPageRoute(builder: (context) => page));
+    // Both players navigate from the committed room update, never a local tap.
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (context) => page));
   }
 
   Widget _buildPlayerSlot(String name, String role, bool isConnected) {
@@ -176,23 +213,35 @@ class _LobbyPageState extends State<LobbyPage> {
                     style: TextStyle(color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 12),
-                  _buildPlayerSlot('P1: Anfitrião', _role.label, _room != null),
+                  _buildPlayerSlot(
+                    _isHost ? 'P1: Anfitrião (tu)' : 'P1: Anfitrião',
+                    (_room?.hostRole ?? PlayerRole.defuser).label,
+                    _room != null,
+                  ),
                   const Divider(color: AppColors.metalGrey, height: 24),
                   _buildPlayerSlot(
                     _room?.guestUid != null
-                        ? 'P2: Jogador ligado'
+                        ? (_isHost
+                              ? 'P2: Jogador ligado'
+                              : 'P2: Jogador ligado (tu)')
                         : 'À espera...',
-                    _role.partner.label,
+                    (_room?.hostRole ?? PlayerRole.defuser).partner.label,
                     _room?.guestUid != null,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            MenuButton(
-              label: 'TROCAR PAPÉIS',
-              onPressed: () => setState(() => _role = _role.partner),
-              color: AppColors.metalGrey,
+            IgnorePointer(
+              ignoring: _busy || _room == null || _openingGame,
+              child: Opacity(
+                opacity: _busy || _room == null || _openingGame ? 0.5 : 1,
+                child: MenuButton(
+                  label: 'TROCAR PAPÉIS',
+                  onPressed: _switchRoles,
+                  color: AppColors.metalGrey,
+                ),
+              ),
             ),
             const SizedBox(height: 24),
             TextField(
@@ -248,10 +297,18 @@ class _LobbyPageState extends State<LobbyPage> {
               ),
             ),
             const SizedBox(height: 40),
-            MenuButton(
-              label: 'COMEÇAR',
-              onPressed: _startGame,
-              color: AppColors.danger,
+            IgnorePointer(
+              ignoring: _busy || !_isHost || _openingGame,
+              child: Opacity(
+                opacity: _busy || !_isHost || _openingGame ? 0.5 : 1,
+                child: MenuButton(
+                  label: _room != null && !_isHost
+                      ? 'À ESPERA DO ANFITRIÃO'
+                      : 'COMEÇAR',
+                  onPressed: _startGame,
+                  color: AppColors.danger,
+                ),
+              ),
             ),
           ],
         ),

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
   throw new Error("Start the Firestore emulator before running this test.");
 }
-const {createRoom, joinRoom, deleteRoom} = require("../lib/index.js");
+const {createRoom, joinRoom, deleteRoom, startGame, switchRoles} = require("../lib/index.js");
 const {getFirestore} = require("firebase-admin/firestore");
 const request = (uid, data = {}) => ({auth: uid ? {uid} : undefined, data});
 const rejects = (operation, code) => assert.rejects(operation, {code});
@@ -18,6 +18,19 @@ async function main() {
   const ref = getFirestore().collection("rooms").doc(room.roomId);
   try {
     assert.match(room.code, /^\d{6}$/);
+    await rejects(startGame.run(request(null, {roomId: room.roomId})),
+      "unauthenticated");
+    await rejects(switchRoles.run(request(null, {roomId: room.roomId})),
+      "unauthenticated");
+    await rejects(startGame.run(request("host", {roomId: room.roomId})),
+      "failed-precondition");
+    await rejects(switchRoles.run(request("outsider", {roomId: room.roomId})),
+      "permission-denied");
+    await rejects(startGame.run(request("host", {roomId: "../bad"})),
+      "invalid-argument");
+    assert.equal((await ref.get()).get("hostRole"), "defuser");
+    await switchRoles.run(request("host", {roomId: room.roomId}));
+    assert.equal((await ref.get()).get("hostRole"), "manual");
     const attempts = await Promise.allSettled([
       joinRoom.run(request("guest-a", {code: room.code})),
       joinRoom.run(request("guest-b", {code: room.code})),
@@ -32,6 +45,32 @@ async function main() {
     await rejects(deleteRoom.run(request(state.guestUid, {
       roomId: room.roomId,
     })), "permission-denied");
+    await rejects(startGame.run(request(state.guestUid, {
+      roomId: room.roomId,
+    })), "permission-denied");
+    await switchRoles.run(request(state.guestUid, {roomId: room.roomId}));
+    assert.equal((await ref.get()).get("hostRole"), "defuser");
+    // Start competes with a swap: the committed role must freeze at start.
+    const race = await Promise.allSettled([
+      startGame.run(request("host", {roomId: room.roomId})),
+      switchRoles.run(request(state.guestUid, {roomId: room.roomId})),
+    ]);
+    assert.equal(race[0].status, "fulfilled");
+    if (race[1].status === "rejected") {
+      assert.equal(race[1].reason.code, "failed-precondition");
+    }
+    const playing = (await ref.get()).data();
+    assert.equal(playing.status, "playing");
+    await startGame.run(request("host", {roomId: room.roomId}));
+    assert.equal((await ref.get()).get("startedAt").toMillis(),
+      playing.startedAt.toMillis());
+    await rejects(switchRoles.run(request("host", {roomId: room.roomId})),
+      "failed-precondition");
+    for (const uid of ["host", state.guestUid, "outsider"]) {
+      await rejects(joinRoom.run(request(uid, {code: room.code})),
+        "failed-precondition");
+    }
+    assert.equal((await ref.get()).get("hostRole"), playing.hostRole);
     await ref.update({expiresAt: require("firebase-admin/firestore")
       .Timestamp.fromMillis(0)});
     await rejects(joinRoom.run(request("other", {code: room.code})),

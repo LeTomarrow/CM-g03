@@ -7,7 +7,7 @@ For installation, emulator setup, deployment, and logs, see
 
 Functions run in `europe-west1` (Belgium). A room has one host and one guest.
 The six-digit code is also its document ID in `rooms`. Joining is atomic and
-repeatable for existing members. Only the host can delete a room. Joins are
+repeatable for existing members while the room is open. Only the host can delete a room. Joins are
 rejected after one hour; expiry does not delete the document automatically.
 
 ```dart
@@ -41,12 +41,26 @@ errors also propagate to the caller. Keep the same service instance per app.
 The lobby's CRIAR button calls createRoom and displays the returned six-digit
 code. ENTRAR joins by code. A Firestore listener updates both player slots.
 Loading and errors are shown in the lobby; repeated create/join clicks are
-blocked while a request is running or a room is active. COMEÇAR requires both
-slots to be occupied, but still opens the local game screens independently.
-Role selection remains local. Guest leaving, shared game start, WebRTC
-signaling and game synchronization are not implemented. Leaving the lobby
-cancels its listener but does not delete the room or free a guest slot.
-`ready` only means that both room slots are occupied.
+blocked while a request is running or a room is active.
+
+Either member can press TROCAR PAPÉIS before start. `switchRoles(roomId)`
+transactionally toggles `hostRole` (`defuser` or `manual`); the guest always
+has the opposite role. Both screens display the stored roles and mark the
+local player with `(tu)`. Older rooms without hostRole default to host=defuser.
+
+Only the host can press COMEÇAR, and both players must be in the room.
+`startGame(roomId)` atomically changes `ready` to `playing` and sets startedAt.
+This closes the room to new joins, including repeat joins by members, and
+freezes the roles. The document is retained so both listeners receive the
+start event and navigate once to their assigned screen; it is not deleted.
+Repeated host start requests are safe and preserve the original start time.
+
+Guest leaving, WebRTC signaling and gameplay synchronization are not yet
+implemented. Shared lobby start opens each phone's local game; it does not
+synchronize puzzles or timers. Leaving the lobby cancels its listener but does
+not delete the room or free a guest slot. `ready` means both slots are occupied.
+Rebuild Functions before using the new endpoints in the emulator; for live
+Firebase, deploy the updated Functions first.
 
 ## Backend integration checks
 
@@ -58,5 +72,6 @@ firebase emulators:exec --project demo-wdyp-rooms --only firestore 'node functio
 ```
 
 This uses an isolated local demo project and checks authentication, concurrent
-joins, repeat joins, expiry, and host-only deletion. It does not test browser
+joins, repeat joins, expiry, host-only deletion and start, shared role swaps,
+start/swap races, role locking, and join rejection after start. It does not test browser
 network access or the Flutter UI.
