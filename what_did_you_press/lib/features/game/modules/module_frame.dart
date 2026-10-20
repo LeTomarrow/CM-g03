@@ -142,7 +142,7 @@ class _DialPainter extends CustomPainter {
       final text = TextPainter(
         text: TextSpan(
           text: labels[i],
-          style: GoogleFonts.shareTechMono(
+          style: GoogleFonts.barlowCondensed(
             color: AppColors.textSecondary,
             fontSize: 14,
           ),

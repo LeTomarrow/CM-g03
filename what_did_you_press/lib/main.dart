@@ -33,6 +33,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(theme: AppTheme.darkTheme, home: const MenuPage());
+    return MaterialApp(
+      title: 'WDYP',
+      theme: AppTheme.darkTheme,
+      home: const MenuPage(),
+    );
   }
 }

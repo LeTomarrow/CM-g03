@@ -13,24 +13,34 @@ class MenuButton extends StatelessWidget {
   final void Function() onPressed;
   final Color color;
 
+  /// A chunky hardware key: its darker lower edge reads as depth.
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.labelLarge?.copyWith(color: Colors.white),
+    final light =
+        ThemeData.estimateBrightnessForColor(color) == Brightness.light;
+    final edge = Color.lerp(color, Colors.black, 0.45)!;
+    return SizedBox(
+      width: double.infinity,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(4),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(4),
+              boxShadow: [BoxShadow(color: edge, offset: const Offset(0, 4))],
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: light ? AppColors.background : AppColors.textPrimary,
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/game_models.dart';
+import 'package:what_did_you_press/core/segment_display.dart';
 import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/game/modules/compass_module.dart';
 import 'package:what_did_you_press/features/game/modules/drawing_module.dart';
@@ -168,11 +169,10 @@ class _BombPageState extends State<BombPage> {
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      formatTime(_timeLeft),
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                        color: isCritical ? AppColors.danger : AppColors.amber,
-                      ),
+                    SegmentDisplay(
+                      text: formatTime(_timeLeft),
+                      color: isCritical ? AppColors.led : AppColors.amber,
+                      height: 64,
                     ),
                   ],
                 ),
