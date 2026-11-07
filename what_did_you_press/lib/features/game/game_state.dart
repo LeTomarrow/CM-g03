@@ -8,6 +8,7 @@ class GameState {
     required this.strikes,
     required this.status,
     required this.loadout,
+    this.manualFocus,
     this.started = false,
   });
 
@@ -22,6 +23,7 @@ class GameState {
   final int strikes;
   final BombEngineStatus status;
   final BombLoadout loadout;
+  final int? manualFocus;
   final bool started;
 
   GameState copyWith({
@@ -30,11 +32,13 @@ class GameState {
     BombEngineStatus? status,
     bool? started,
     BombLoadout? loadout,
+    int? manualFocus,
   }) => GameState(
     timeLeft: timeLeft ?? this.timeLeft,
     strikes: strikes ?? this.strikes,
     status: status ?? this.status,
     started: started ?? this.started,
     loadout: loadout ?? this.loadout,
+    manualFocus: manualFocus ?? this.manualFocus,
   );
 }

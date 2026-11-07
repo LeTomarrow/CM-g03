@@ -9,6 +9,7 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/manual/terminal.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/services/room_service.dart';
 
 class ManualPage extends ConsumerStatefulWidget {
@@ -149,19 +150,47 @@ class _ManualPageState extends ConsumerState<ManualPage> {
 
   Widget _buildBombStatus() {
     final game = ref.watch(gameControllerProvider);
+    final controller = ref.read(gameControllerProvider.notifier);
     return _buildSection('BOMBA EM DIRETO', AppColors.danger, [
       _buildRow('TEMPO', formatTime(game.timeLeft)),
       _buildRow('STRIKES', '${game.strikes}/3'),
-      for (final module in game.loadout.modules)
-        _buildRow(
-          '${module.type.label} · V${module.variant + 1}',
-          module.solved
-              ? 'RESOLVIDO'
-              : module.failureCount == 0
-              ? 'PENDENTE'
-              : 'FALHAS: ${module.failureCount}',
+      for (var index = 0; index < game.loadout.modules.length; index++)
+        _buildModuleStatusRow(
+          game.loadout.modules[index],
+          () => controller.sendModuleFocus(index),
         ),
     ]);
+  }
+
+  Widget _buildModuleStatusRow(BombModuleState module, VoidCallback onFocus) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${module.type.label} · V${module.variant + 1}',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+          Text(
+            module.solved
+                ? 'RESOLVIDO'
+                : module.failureCount == 0
+                ? 'PENDENTE'
+                : 'FALHAS: ${module.failureCount}',
+            style: TextStyle(color: AppColors.amber),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Focar este módulo no defuser',
+            onPressed: module.solved ? null : onFocus,
+            icon: const Icon(Icons.visibility, size: 18),
+            color: AppColors.neonBlue,
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildBlackout() {

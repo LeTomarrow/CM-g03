@@ -39,13 +39,11 @@ class GameController extends Notifier<GameState> {
   }) async {
     if (state.started) return;
     _roomService = roomService;
+    if (roomService != null) {
+      _remoteSubscription = roomService.gameMessages.listen(_onGameMessage);
+    }
     if (!authority) {
       state = state.copyWith(started: true);
-      if (roomService != null) {
-        _remoteSubscription = roomService.gameMessages.listen((message) {
-          if (message.type == 'snapshot') _applyRemoteSnapshot(message);
-        });
-      }
       return;
     }
     final engine = await BombEngine.start(
@@ -66,6 +64,32 @@ class GameController extends Notifier<GameState> {
       ),
     );
     _engineSubscription = engine.states.listen(_onEngineState);
+  }
+
+  void sendModuleFocus(int index) {
+    final service = _roomService;
+    if (service == null) return;
+    unawaited(
+      service.sendGameMessage(
+        type: 'command',
+        revision: _revision++,
+        payload: {'command': 'module_focus', 'moduleIndex': index},
+      ),
+    );
+  }
+
+  void _onGameMessage(GameMessage message) {
+    if (message.type == 'snapshot') {
+      _applyRemoteSnapshot(message);
+      return;
+    }
+    if (message.type != 'command' || !state.started) return;
+    if (message.payload['command'] != 'module_focus') return;
+    final index = message.payload['moduleIndex'];
+    if (index is! int || index < 0 || index >= state.loadout.modules.length) {
+      return;
+    }
+    state = state.copyWith(manualFocus: index);
   }
 
   void _applyRemoteSnapshot(GameMessage message) {

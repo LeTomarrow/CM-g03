@@ -207,6 +207,13 @@ class _BombPageState extends ConsumerState<BombPage> {
                 style: TextStyle(color: AppColors.textSecondary, fontSize: 18),
               ),
               const SizedBox(height: 16),
+              if (game.manualFocus != null) ...[
+                Text(
+                  'O MANUAL ESTÁ A CONSULTAR: ${game.loadout.modules[game.manualFocus!].type.label}',
+                  style: const TextStyle(color: AppColors.neonBlue),
+                ),
+                const SizedBox(height: 12),
+              ],
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,

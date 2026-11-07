@@ -573,7 +573,7 @@ Ainda por implementar:
 ### Fase 1 — completar a vertical do jogo
 
 1. Criar `GameTransport` como abstração sobre o DataChannel.
-2. Definir comandos de módulo, por exemplo `module_input`.
+2. Expandir o comando `module_focus` para comandos de input específicos de cada módulo.
 3. Validar revisões e ignorar snapshots antigos.
 4. Testar o mesmo cenário em dois controllers independentes.
 
