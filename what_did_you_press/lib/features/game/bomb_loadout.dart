@@ -37,6 +37,15 @@ class BombModuleState {
     'status': status.name,
     'failureCount': failureCount,
   };
+
+  factory BombModuleState.fromJson(Map<String, dynamic> json) =>
+      BombModuleState(
+        id: json['id'] as String,
+        type: ModuleType.values.byName(json['type'] as String),
+        variant: json['variant'] as int,
+        status: ModuleStatus.values.byName(json['status'] as String),
+        failureCount: json['failureCount'] as int,
+      );
 }
 
 class BombLoadout {
@@ -66,4 +75,17 @@ class BombLoadout {
 
   List<Map<String, dynamic>> toJson() =>
       modules.map((module) => module.toJson()).toList();
+
+  factory BombLoadout.fromJson({
+    required int seed,
+    required List<dynamic> json,
+  }) => BombLoadout(
+    seed: seed,
+    modules: List.unmodifiable(
+      json.map(
+        (module) =>
+            BombModuleState.fromJson(Map<String, dynamic>.from(module as Map)),
+      ),
+    ),
+  );
 }

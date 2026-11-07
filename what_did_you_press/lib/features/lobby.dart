@@ -249,7 +249,7 @@ class _LobbyPageState extends State<LobbyPage> {
     final role = room.roleFor(uid);
     final bombId = widget.bombId;
     final Widget page = role == PlayerRole.manual
-        ? const ManualPage()
+        ? ManualPage(roomService: _rooms)
         : bombId == null
         ? BombPage(roomService: _rooms)
         : BombPage(

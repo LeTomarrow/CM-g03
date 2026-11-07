@@ -1,22 +1,39 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/drawing.dart';
 import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/manual/terminal.dart';
+import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/services/room_service.dart';
 
-class ManualPage extends StatefulWidget {
-  const ManualPage({super.key});
+class ManualPage extends ConsumerStatefulWidget {
+  const ManualPage({super.key, this.roomService});
+
+  final RoomService? roomService;
 
   @override
-  State<ManualPage> createState() => _ManualPageState();
+  ConsumerState<ManualPage> createState() => _ManualPageState();
 }
 
-class _ManualPageState extends State<ManualPage> {
+class _ManualPageState extends ConsumerState<ManualPage> {
   HackType? _activeHack;
+
+  @override
+  void initState() {
+    super.initState();
+    ref
+        .read(gameControllerProvider.notifier)
+        .start(
+          moduleCount: ModuleType.values.length,
+          roomService: widget.roomService,
+          authority: false,
+        );
+  }
 
   // Mockup only: in the real game the hack comes from the other device.
   void _simulateHack() {
@@ -130,6 +147,23 @@ class _ManualPageState extends State<ManualPage> {
     );
   }
 
+  Widget _buildBombStatus() {
+    final game = ref.watch(gameControllerProvider);
+    return _buildSection('BOMBA EM DIRETO', AppColors.danger, [
+      _buildRow('TEMPO', formatTime(game.timeLeft)),
+      _buildRow('STRIKES', '${game.strikes}/3'),
+      for (final module in game.loadout.modules)
+        _buildRow(
+          '${module.type.label} · V${module.variant + 1}',
+          module.solved
+              ? 'RESOLVIDO'
+              : module.failureCount == 0
+              ? 'PENDENTE'
+              : 'FALHAS: ${module.failureCount}',
+        ),
+    ]);
+  }
+
   Widget _buildBlackout() {
     return Container(
       color: Colors.black,
@@ -195,6 +229,7 @@ class _ManualPageState extends State<ManualPage> {
               ListView(
                 padding: const EdgeInsets.all(24.0),
                 children: [
+                  if (widget.roomService != null) _buildBombStatus(),
                   if (hack != null) ...[
                     _buildHackBanner(hack),
                     const SizedBox(height: 24),

@@ -6,6 +6,7 @@ import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/features/game/game_event.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/services/room_service.dart';
+import 'package:what_did_you_press/services/game_protocol.dart';
 
 final gameControllerProvider =
     NotifierProvider.autoDispose<GameController, GameState>(GameController.new);
@@ -18,11 +19,14 @@ class GameController extends Notifier<GameState> {
   RoomService? _roomService;
   int _revision = 0;
   int? _lastPublishedSecond;
+  int _lastRemoteRevision = -1;
+  StreamSubscription<GameMessage>? _remoteSubscription;
 
   @override
   GameState build() {
     ref.onDispose(() {
       _engineSubscription?.cancel();
+      _remoteSubscription?.cancel();
       _engine?.dispose();
     });
     return GameState.initial();
@@ -31,9 +35,19 @@ class GameController extends Notifier<GameState> {
   Future<void> start({
     required int moduleCount,
     RoomService? roomService,
+    bool authority = true,
   }) async {
     if (state.started) return;
     _roomService = roomService;
+    if (!authority) {
+      state = state.copyWith(started: true);
+      if (roomService != null) {
+        _remoteSubscription = roomService.gameMessages.listen((message) {
+          if (message.type == 'snapshot') _applyRemoteSnapshot(message);
+        });
+      }
+      return;
+    }
     final engine = await BombEngine.start(
       duration: const Duration(minutes: 5),
       moduleCount: moduleCount,
@@ -52,6 +66,22 @@ class GameController extends Notifier<GameState> {
       ),
     );
     _engineSubscription = engine.states.listen(_onEngineState);
+  }
+
+  void _applyRemoteSnapshot(GameMessage message) {
+    if (!ref.mounted || message.revision <= _lastRemoteRevision) return;
+    final payload = message.payload;
+    final modules = payload['modules'];
+    final seed = payload['seed'];
+    if (modules is! List || seed is! int) return;
+    _lastRemoteRevision = message.revision;
+    final loadout = BombLoadout.fromJson(seed: seed, json: modules);
+    state = state.copyWith(
+      timeLeft: Duration(milliseconds: payload['timeLeftMs'] as int),
+      strikes: payload['strikes'] as int,
+      status: BombEngineStatus.values.byName(payload['status'] as String),
+      loadout: loadout,
+    );
   }
 
   void solveModule(int index) {

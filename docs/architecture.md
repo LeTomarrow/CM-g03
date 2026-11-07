@@ -440,7 +440,10 @@ GameController do manual
 ManualPage
 ```
 
-O manual deverá receber snapshots e enviar comandos de input. Não deverá iniciar um segundo `BombEngine`.
+O manual recebe snapshots através do `GameController` em modo réplica. A
+primeira versão já mostra tempo, strikes, módulos, variantes e falhas. Os
+comandos específicos dos módulos ainda devem ser adicionados sem permitir que
+o manual se torne autoridade do jogo.
 
 ## 10. Protocolos de comunicação
 
@@ -559,7 +562,6 @@ Ainda por implementar:
 - `LobbyState` e `LobbyController`;
 - separar `RoomService` em repository e services menores;
 - `GameTransport` independente do `RoomService`;
-- controller do manual para consumir snapshots;
 - comandos de jogo versionados para cada módulo;
 - confirmação e deduplicação de comandos;
 - sincronização dos resultados no manual;
@@ -571,10 +573,9 @@ Ainda por implementar:
 ### Fase 1 — completar a vertical do jogo
 
 1. Criar `GameTransport` como abstração sobre o DataChannel.
-2. Fazer o manual observar `GameMessage` através de `GameController`.
-3. Definir comandos de módulo, por exemplo `module_input`.
-4. Validar revisões e ignorar snapshots antigos.
-5. Testar o mesmo cenário em dois controllers independentes.
+2. Definir comandos de módulo, por exemplo `module_input`.
+3. Validar revisões e ignorar snapshots antigos.
+4. Testar o mesmo cenário em dois controllers independentes.
 
 ### Fase 2 — migrar a lobby
 
