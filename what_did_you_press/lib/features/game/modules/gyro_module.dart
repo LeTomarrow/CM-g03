@@ -5,7 +5,9 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/features/game/modules/module_frame.dart';
 
 class GyroModulePage extends StatefulWidget {
-  const GyroModulePage({super.key});
+  const GyroModulePage({super.key, this.variant = 0});
+
+  final int variant;
 
   @override
   State<GyroModulePage> createState() => _GyroModulePageState();
@@ -14,7 +16,8 @@ class GyroModulePage extends StatefulWidget {
 class _GyroModulePageState extends State<GyroModulePage> {
   static const double _tolerance = 10;
 
-  final String _sequence = (angleTable.keys.toList()..shuffle()).first;
+  String get _sequence =>
+      angleTable.keys.elementAt(widget.variant % angleTable.length);
   double _angle = 0;
 
   void _confirm() {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/features/game/game_event.dart';
+import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/services/room_service.dart';
 
 final gameControllerProvider =
@@ -43,7 +44,13 @@ class GameController extends Notifier<GameState> {
       return;
     }
     _engine = engine;
-    state = state.copyWith(started: true);
+    state = state.copyWith(
+      started: true,
+      loadout: BombLoadout.generate(
+        seed: DateTime.now().microsecondsSinceEpoch,
+        moduleCount: moduleCount,
+      ),
+    );
     _engineSubscription = engine.states.listen(_onEngineState);
   }
 
@@ -51,8 +58,8 @@ class GameController extends Notifier<GameState> {
     _dispatch(SolveModuleRequested(index));
   }
 
-  void registerStrike() {
-    _dispatch(const StrikeRequested());
+  void registerStrike(int index) {
+    _dispatch(StrikeRequested(index));
   }
 
   void _onEngineState(BombEngineState next) {
@@ -63,8 +70,8 @@ class GameController extends Notifier<GameState> {
     switch (event) {
       case SolveModuleRequested(:final index):
         _engine?.solveModule(index);
-      case StrikeRequested():
-        _engine?.registerStrike();
+      case StrikeRequested(:final index):
+        _engine?.registerStrike(index);
       case EngineStateReceived(:final state):
         _reduce(state);
     }
@@ -72,11 +79,20 @@ class GameController extends Notifier<GameState> {
 
   void _reduce(BombEngineState next) {
     if (!ref.mounted) return;
+    final modules = [
+      for (var index = 0; index < state.loadout.modules.length; index++)
+        state.loadout.modules[index].copyWith(
+          status: next.solvedModules.contains(index)
+              ? ModuleStatus.solved
+              : ModuleStatus.pending,
+          failureCount: next.failureCounts[index] ?? 0,
+        ),
+    ];
     state = state.copyWith(
       timeLeft: next.timeLeft,
       strikes: next.strikes,
-      solvedModules: Set.unmodifiable(next.solvedModules),
       status: next.status,
+      loadout: state.loadout.copyWith(modules: modules),
     );
     final service = _roomService;
     final second = next.timeLeft.inSeconds;
@@ -95,6 +111,8 @@ class GameController extends Notifier<GameState> {
           'strikes': next.strikes,
           'solvedModules': next.solvedModules.toList(),
           'status': next.status.name,
+          'seed': state.loadout.seed,
+          'modules': state.loadout.toJson(),
         },
       ),
     );

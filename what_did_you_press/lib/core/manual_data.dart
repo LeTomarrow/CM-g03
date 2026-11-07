@@ -91,6 +91,34 @@ const List<String> symbolRules = [
   'Senão, carrega no primeiro símbolo.',
 ];
 
+/// Fixed symbol boards used by the bomb loadout variants.
+const List<List<SymbolTile>> symbolVariants = [
+  [
+    SymbolTile('★', AppColors.danger),
+    SymbolTile('▲', AppColors.neonBlue),
+    SymbolTile('●', AppColors.amber),
+    SymbolTile('■', AppColors.success),
+    SymbolTile('◆', AppColors.neonBlue),
+    SymbolTile('✚', AppColors.amber),
+  ],
+  [
+    SymbolTile('●', AppColors.neonBlue),
+    SymbolTile('▲', AppColors.neonBlue),
+    SymbolTile('■', AppColors.amber),
+    SymbolTile('◆', AppColors.neonBlue),
+    SymbolTile('✚', Colors.white),
+    SymbolTile('★', AppColors.success),
+  ],
+  [
+    SymbolTile('✚', AppColors.amber),
+    SymbolTile('◆', AppColors.success),
+    SymbolTile('■', AppColors.neonBlue),
+    SymbolTile('●', AppColors.danger),
+    SymbolTile('▲', AppColors.amber),
+    SymbolTile('★', AppColors.neonBlue),
+  ],
+];
+
 /// Applies [symbolRules] and returns the index of the tile to press.
 int solveSymbols(List<SymbolTile> tiles) {
   final redStar = tiles.indexWhere(

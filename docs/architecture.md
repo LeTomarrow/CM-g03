@@ -241,7 +241,7 @@ state = state.copyWith(
 );
 ```
 
-Não se deve alterar diretamente uma coleção que já esteja dentro do estado. Coleções recebidas do engine são convertidas para conjuntos não modificáveis antes de serem publicadas.
+Não se deve alterar diretamente uma coleção que já esteja dentro do estado. Coleções recebidas do engine são convertidas para estruturas imutáveis antes de serem publicadas.
 
 ### 5.2 Estado da bomba
 
@@ -255,7 +255,30 @@ O `GameState` atual contém:
 
 O estado é criado pelo `GameController`, que coordena o `BombEngine`.
 
-### 5.3 Ciclo de vida
+### 5.3 Composição da bomba e estado dos módulos
+
+Uma bomba não é apenas uma lista de tipos. O `BombLoadout` representa a
+composição sorteada da partida:
+
+```text
+BombLoadout
+  ├── seed
+  └── modules
+       ├── id
+       ├── type
+       ├── variant
+       ├── status
+       └── failureCount
+```
+
+O `type` identifica a família do módulo e `variant` identifica a variante
+concreta que calhou nessa bomba. O `failureCount` pertence ao módulo, enquanto
+o número global de strikes pertence ao `GameState`.
+
+O loadout é gerado no defuser e enviado explicitamente no snapshot inicial. O
+manual não deve fazer um sorteio local, mesmo que conheça a seed.
+
+### 5.4 Ciclo de vida
 
 O `gameControllerProvider` é `autoDispose` porque o estado da bomba pertence a uma única partida.
 

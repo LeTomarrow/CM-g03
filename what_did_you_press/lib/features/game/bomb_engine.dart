@@ -6,12 +6,14 @@ class BombEngineState {
     required this.timeLeft,
     required this.strikes,
     required this.solvedModules,
+    required this.failureCounts,
     required this.status,
   });
 
   final Duration timeLeft;
   final int strikes;
   final Set<int> solvedModules;
+  final Map<int, int> failureCounts;
   final BombEngineStatus status;
 }
 
@@ -62,7 +64,8 @@ class BombEngine {
   void solveModule(int index) =>
       _commands.send({'command': 'solve', 'index': index});
 
-  void registerStrike() => _commands.send({'command': 'strike'});
+  void registerStrike(int moduleIndex) =>
+      _commands.send({'command': 'strike', 'index': moduleIndex});
 
   Future<void> dispose() async {
     _commands.send({'command': 'dispose'});
@@ -74,6 +77,7 @@ class BombEngine {
     timeLeft: Duration(milliseconds: message['timeLeftMs'] as int),
     strikes: message['strikes'] as int,
     solvedModules: (message['solved'] as List).cast<int>().toSet(),
+    failureCounts: Map<int, int>.from(message['failureCounts'] as Map),
     status: BombEngineStatus.values.byName(message['status'] as String),
   );
 }
@@ -87,6 +91,7 @@ void _run(Map<String, dynamic> args) {
   final maxStrikes = args['maxStrikes'] as int;
   final startedAt = DateTime.now();
   final solved = <int>{};
+  final failureCounts = <int, int>{};
   var strikes = 0;
   var status = BombEngineStatus.running;
 
@@ -99,6 +104,7 @@ void _run(Map<String, dynamic> args) {
       'timeLeftMs': left.isNegative ? 0 : left.inMilliseconds,
       'strikes': strikes,
       'solved': solved.toList(),
+      'failureCounts': failureCounts,
       'status': status.name,
     });
   }
@@ -118,7 +124,10 @@ void _run(Map<String, dynamic> args) {
         if (solved.length == moduleCount) status = BombEngineStatus.defused;
         emit();
       case 'strike':
+        final index = message['index'];
+        if (index is! int || index < 0 || index >= moduleCount) return;
         strikes++;
+        failureCounts[index] = (failureCounts[index] ?? 0) + 1;
         if (strikes >= maxStrikes) status = BombEngineStatus.exploded;
         emit();
       case 'dispose':

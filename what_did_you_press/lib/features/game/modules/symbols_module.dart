@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/game_models.dart';
@@ -7,21 +5,17 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/features/game/modules/module_frame.dart';
 
 class SymbolsModulePage extends StatefulWidget {
-  const SymbolsModulePage({super.key});
+  const SymbolsModulePage({super.key, this.variant = 0});
+
+  final int variant;
 
   @override
   State<SymbolsModulePage> createState() => _SymbolsModulePageState();
 }
 
 class _SymbolsModulePageState extends State<SymbolsModulePage> {
-  final Random _random = Random();
-  late final List<SymbolTile> _tiles = List.generate(
-    6,
-    (_) => SymbolTile(
-      symbolPool[_random.nextInt(symbolPool.length)],
-      symbolColors[_random.nextInt(symbolColors.length)],
-    ),
-  );
+  late final List<SymbolTile> _tiles =
+      symbolVariants[widget.variant % symbolVariants.length];
   int? _selected;
 
   void _confirm() {

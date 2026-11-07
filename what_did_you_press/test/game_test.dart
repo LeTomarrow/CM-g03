@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/core/manual_data.dart';
+import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 
 void main() {
   test('formatTime mostra MM:SS', () {
@@ -45,5 +46,13 @@ void main() {
     expect(caesarShift('PAVIO', 3), 'SDYLR');
     expect(caesarShift('ZEBRA', 2), 'BGDTC');
     expect(caesarShift(caesarShift('FUSIVEL', 4), -4), 'FUSIVEL');
+  });
+
+  test('loadout com a mesma seed é determinístico e guarda variantes', () {
+    final first = BombLoadout.generate(seed: 42);
+    final second = BombLoadout.generate(seed: 42);
+    expect(first.toJson(), second.toJson());
+    expect(first.modules, hasLength(5));
+    expect(first.modules.every((module) => module.variant >= 0), isTrue);
   });
 }

@@ -15,6 +15,7 @@ import 'package:what_did_you_press/features/game/result.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
 import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
+import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/services/room_service.dart';
 
 class BombPage extends ConsumerStatefulWidget {
@@ -31,9 +32,6 @@ class BombPage extends ConsumerStatefulWidget {
 class _BombPageState extends ConsumerState<BombPage> {
   static const int _maxStrikes = 3;
 
-  final List<BombModule> _modules = ModuleType.values
-      .map(BombModule.new)
-      .toList();
   bool _ended = false;
 
   @override
@@ -42,7 +40,10 @@ class _BombPageState extends ConsumerState<BombPage> {
     unawaited(
       ref
           .read(gameControllerProvider.notifier)
-          .start(moduleCount: _modules.length, roomService: widget.roomService),
+          .start(
+            moduleCount: ModuleType.values.length,
+            roomService: widget.roomService,
+          ),
     );
   }
 
@@ -71,40 +72,40 @@ class _BombPageState extends ConsumerState<BombPage> {
     if (leave && mounted) _endGame(false);
   }
 
-  Widget _pageFor(ModuleType type) {
+  Widget _pageFor(ModuleType type, int variant) {
     return switch (type) {
-      ModuleType.gyro => const GyroModulePage(),
-      ModuleType.compass => const CompassModulePage(),
-      ModuleType.morse => const MorseModulePage(),
-      ModuleType.symbols => const SymbolsModulePage(),
-      ModuleType.drawing => const DrawingModulePage(),
+      ModuleType.gyro => GyroModulePage(variant: variant),
+      ModuleType.compass => CompassModulePage(variant: variant),
+      ModuleType.morse => MorseModulePage(variant: variant),
+      ModuleType.symbols => SymbolsModulePage(variant: variant),
+      ModuleType.drawing => DrawingModulePage(variant: variant),
     };
   }
 
   Future<void> _openModule(int moduleIndex) async {
-    final module = _modules[moduleIndex];
+    final module = ref
+        .read(gameControllerProvider)
+        .loadout
+        .modules[moduleIndex];
     final solved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (context) => _pageFor(module.type)),
+      MaterialPageRoute(
+        builder: (context) => _pageFor(module.type, module.variant),
+      ),
     );
     if (!mounted || solved == null) return;
     final controller = ref.read(gameControllerProvider.notifier);
     if (solved) {
       controller.solveModule(moduleIndex);
     } else {
-      controller.registerStrike();
+      controller.registerStrike(moduleIndex);
     }
   }
 
-  Widget _buildModuleCard(
-    int index,
-    BombModule module,
-    Set<int> solvedModules,
-  ) {
-    final solved = solvedModules.contains(index);
-    final color = solved ? AppColors.textDim : module.type.color;
+  Widget _buildModuleCard(int index, BombModuleState module) {
+    final color = module.solved ? AppColors.textDim : module.type.color;
 
     return InkWell(
-      onTap: solved ? null : () => _openModule(index),
+      onTap: module.solved ? null : () => _openModule(index),
       child: Container(
         padding: const EdgeInsets.all(12),
         color: AppColors.card,
@@ -113,7 +114,7 @@ class _BombPageState extends ConsumerState<BombPage> {
             Align(
               alignment: Alignment.topRight,
               child: StatusLed(
-                color: solved ? AppColors.success : AppColors.danger,
+                color: module.solved ? AppColors.success : AppColors.danger,
               ),
             ),
             Icon(module.type.icon, size: 40, color: color),
@@ -213,8 +214,8 @@ class _BombPageState extends ConsumerState<BombPage> {
                 mainAxisSpacing: 16,
                 crossAxisSpacing: 16,
                 children: [
-                  for (var i = 0; i < _modules.length; i++)
-                    _buildModuleCard(i, _modules[i], game.solvedModules),
+                  for (var i = 0; i < game.loadout.modules.length; i++)
+                    _buildModuleCard(i, game.loadout.modules[i]),
                 ],
               ),
             ],

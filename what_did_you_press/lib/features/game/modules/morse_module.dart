@@ -7,7 +7,9 @@ import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/game/modules/module_frame.dart';
 
 class MorseModulePage extends StatefulWidget {
-  const MorseModulePage({super.key});
+  const MorseModulePage({super.key, this.variant = 0});
+
+  final int variant;
 
   @override
   State<MorseModulePage> createState() => _MorseModulePageState();
@@ -16,7 +18,8 @@ class MorseModulePage extends StatefulWidget {
 class _MorseModulePageState extends State<MorseModulePage> {
   static const Duration _unit = Duration(milliseconds: 250);
 
-  final String _word = (morseFrequencies.keys.toList()..shuffle()).first;
+  String get _word =>
+      morseFrequencies.keys.elementAt(widget.variant % morseFrequencies.length);
   bool _playing = false;
   bool _ledOn = false;
   String? _selected;

@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/drawing.dart';
@@ -8,14 +6,16 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/features/game/modules/module_frame.dart';
 
 class DrawingModulePage extends StatefulWidget {
-  const DrawingModulePage({super.key});
+  const DrawingModulePage({super.key, this.variant = 0});
+
+  final int variant;
 
   @override
   State<DrawingModulePage> createState() => _DrawingModulePageState();
 }
 
 class _DrawingModulePageState extends State<DrawingModulePage> {
-  final Glyph _glyph = glyphs[Random().nextInt(glyphs.length)];
+  late final Glyph _glyph = glyphs[widget.variant % glyphs.length];
   WireColor? _selected;
 
   @override

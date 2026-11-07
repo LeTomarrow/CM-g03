@@ -10,7 +10,8 @@ final class SolveModuleRequested extends GameEvent {
 }
 
 final class StrikeRequested extends GameEvent {
-  const StrikeRequested();
+  const StrikeRequested(this.index);
+  final int index;
 }
 
 final class EngineStateReceived extends GameEvent {

@@ -1,39 +1,40 @@
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
+import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 
 /// Immutable state rendered by both bomb views.
 class GameState {
   const GameState({
     required this.timeLeft,
     required this.strikes,
-    required this.solvedModules,
     required this.status,
+    required this.loadout,
     this.started = false,
   });
 
-  factory GameState.initial() => const GameState(
+  factory GameState.initial() => GameState(
     timeLeft: Duration(minutes: 5),
     strikes: 0,
-    solvedModules: <int>{},
     status: BombEngineStatus.running,
+    loadout: BombLoadout.generate(seed: 0),
   );
 
   final Duration timeLeft;
   final int strikes;
-  final Set<int> solvedModules;
   final BombEngineStatus status;
+  final BombLoadout loadout;
   final bool started;
 
   GameState copyWith({
     Duration? timeLeft,
     int? strikes,
-    Set<int>? solvedModules,
     BombEngineStatus? status,
     bool? started,
+    BombLoadout? loadout,
   }) => GameState(
     timeLeft: timeLeft ?? this.timeLeft,
     strikes: strikes ?? this.strikes,
-    solvedModules: solvedModules ?? this.solvedModules,
     status: status ?? this.status,
     started: started ?? this.started,
+    loadout: loadout ?? this.loadout,
   );
 }

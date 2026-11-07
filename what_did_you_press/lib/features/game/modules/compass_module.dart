@@ -5,7 +5,9 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/features/game/modules/module_frame.dart';
 
 class CompassModulePage extends StatefulWidget {
-  const CompassModulePage({super.key});
+  const CompassModulePage({super.key, this.variant = 0});
+
+  final int variant;
 
   @override
   State<CompassModulePage> createState() => _CompassModulePageState();
@@ -14,7 +16,8 @@ class CompassModulePage extends StatefulWidget {
 class _CompassModulePageState extends State<CompassModulePage> {
   static const double _tolerance = 15;
 
-  final String _sequence = (compassTable.keys.toList()..shuffle()).first;
+  String get _sequence =>
+      compassTable.keys.elementAt(widget.variant % compassTable.length);
   double _heading = 0;
 
   void _confirm() {
