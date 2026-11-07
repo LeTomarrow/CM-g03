@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:what_did_you_press/features/menu.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/firebase_options.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +26,7 @@ Future<void> main() async {
     FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
   }
 
-  runApp(const MainApp());
+  runApp(const ProviderScope(child: MainApp()));
 }
 
 class MainApp extends StatelessWidget {

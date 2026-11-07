@@ -132,13 +132,22 @@ guest notifies the host and ends the peer session. Guest slots are not recycled
 in place: create a fresh room to avoid mixing old SDP and ICE with a new peer.
 Network failure is reported; automatic ICE restart/reconnection is not included.
 
+Gameplay transport is exposed by `RoomService.gameMessages` and
+`sendGameMessage()`. These messages use a separate scope, session and revision
+from the lobby protocol, and are never persisted in Firestore. The defuser is
+the gameplay authority: `features/game/bomb_engine.dart` runs its timer,
+strikes and solved-module set in a Dart isolate. `BombPage` publishes compact
+authoritative snapshots over the DataChannel; the manual should render those
+snapshots and send only input/command messages. It must not run a second timer
+or decide results locally.
+
 ## Current scope
 
 Create, join, close/delete, shared role changes, host-only shared start and
-signaling cleanup are implemented. The existing puzzle/timer screens still
-run local game logic. This migration does not add voice tracks or synchronize
-puzzle events, timers, drawings or results. Those are future protocols on the
-peer transport, not reasons to add Firestore gameplay writes.
+signaling cleanup and the authoritative bomb transport are implemented. The
+module-specific puzzle rules and the manual's snapshot consumer are still the
+next implementation step. They belong on the peer transport, not in Firestore
+gameplay writes.
 
 STUN helps find routes; TURN is needed when direct connectivity fails. The app
 accepts `WEBRTC_STUN_URL` (defaults to Google's public STUN), `WEBRTC_TURN_URL`,

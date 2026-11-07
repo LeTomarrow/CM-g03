@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/services/room_protocol.dart';
+import 'package:what_did_you_press/services/game_protocol.dart';
 
 class RoomConnection {
   const RoomConnection({required this.roomId, required this.code});
@@ -54,6 +55,7 @@ class RoomService {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
   final _events = StreamController<Room?>.broadcast();
+  final _gameEvents = StreamController<GameMessage>.broadcast();
   DocumentReference<Map<String, dynamic>>? _ref;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _subscription;
   RTCPeerConnection? _peer;
@@ -318,7 +320,11 @@ class RoomService {
     channel.onMessage = (message) {
       if (message.isBinary || _disposed) return;
       try {
-        _receive(RoomMessage.decode(message.text, _protocol!.session));
+        try {
+          _receive(RoomMessage.decode(message.text, _protocol!.session));
+        } on FormatException {
+          _gameEvents.add(GameMessage.decode(message.text, _protocol!.session));
+        }
       } on FormatException {
         // Ignore malformed or unrelated packets; never infer identity from JSON.
       } catch (error) {
@@ -467,6 +473,26 @@ class RoomService {
     });
   }
 
+  /// Gameplay transport over the reliable DataChannel retained after start.
+  Stream<GameMessage> get gameMessages => _gameEvents.stream;
+
+  Future<void> sendGameMessage({
+    required String type,
+    required int revision,
+    Map<String, dynamic> payload = const <String, dynamic>{},
+  }) async {
+    if (!_connected || _protocol == null) {
+      throw _error('Espera pela ligação ao outro jogador.');
+    }
+    final message = GameMessage(
+      session: _protocol!.session,
+      type: type,
+      revision: revision,
+      payload: payload,
+    );
+    await _channel!.send(RTCDataChannelMessage(message.encode()));
+  }
+
   void _emit() {
     if (_disposed) return;
     _room = Room(
@@ -531,5 +557,6 @@ class RoomService {
     await _channel?.close();
     await _peer?.close();
     await _events.close();
+    await _gameEvents.close();
   }
 }

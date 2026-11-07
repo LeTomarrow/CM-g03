@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/core/segment_display.dart';
@@ -11,53 +12,51 @@ import 'package:what_did_you_press/features/game/modules/gyro_module.dart';
 import 'package:what_did_you_press/features/game/modules/morse_module.dart';
 import 'package:what_did_you_press/features/game/modules/symbols_module.dart';
 import 'package:what_did_you_press/features/game/result.dart';
+import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/features/game/game_state.dart';
+import 'package:what_did_you_press/features/game/bomb_engine.dart';
+import 'package:what_did_you_press/services/room_service.dart';
 
-class BombPage extends StatefulWidget {
-  const BombPage({super.key, this.onFinished});
+class BombPage extends ConsumerStatefulWidget {
+  const BombPage({super.key, this.onFinished, this.roomService});
 
   /// Called once with `true` if defused; this page is gone by then.
   final void Function(bool defused)? onFinished;
+  final RoomService? roomService;
 
   @override
-  State<BombPage> createState() => _BombPageState();
+  ConsumerState<BombPage> createState() => _BombPageState();
 }
 
-class _BombPageState extends State<BombPage> {
+class _BombPageState extends ConsumerState<BombPage> {
   static const int _maxStrikes = 3;
 
   final List<BombModule> _modules = ModuleType.values
       .map(BombModule.new)
       .toList();
-  Duration _timeLeft = const Duration(minutes: 5);
-  int _strikes = 0;
-  Timer? _timer;
+  bool _ended = false;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _tick() {
-    setState(() => _timeLeft -= const Duration(seconds: 1));
-    if (_timeLeft <= Duration.zero) _endGame(false);
+    unawaited(
+      ref
+          .read(gameControllerProvider.notifier)
+          .start(moduleCount: _modules.length, roomService: widget.roomService),
+    );
   }
 
   void _endGame(bool defused) {
-    _timer?.cancel();
+    if (_ended) return;
+    _ended = true;
+    final game = ref.read(gameControllerProvider);
     widget.onFinished?.call(defused);
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => ResultPage(
           defused: defused,
-          timeLeft: _timeLeft,
-          strikes: _strikes,
+          timeLeft: game.timeLeft,
+          strikes: game.strikes,
         ),
       ),
       (route) => route.isFirst,
@@ -82,32 +81,30 @@ class _BombPageState extends State<BombPage> {
     };
   }
 
-  Future<void> _openModule(BombModule module) async {
+  Future<void> _openModule(int moduleIndex) async {
+    final module = _modules[moduleIndex];
     final solved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (context) => _pageFor(module.type)),
     );
     if (!mounted || solved == null) return;
-
-    setState(() {
-      if (solved) {
-        module.defused = true;
-      } else {
-        _strikes++;
-      }
-    });
-
-    if (_modules.every((module) => module.defused)) {
-      _endGame(true);
-    } else if (_strikes >= _maxStrikes) {
-      _endGame(false);
+    final controller = ref.read(gameControllerProvider.notifier);
+    if (solved) {
+      controller.solveModule(moduleIndex);
+    } else {
+      controller.registerStrike();
     }
   }
 
-  Widget _buildModuleCard(BombModule module) {
-    final color = module.defused ? AppColors.textDim : module.type.color;
+  Widget _buildModuleCard(
+    int index,
+    BombModule module,
+    Set<int> solvedModules,
+  ) {
+    final solved = solvedModules.contains(index);
+    final color = solved ? AppColors.textDim : module.type.color;
 
     return InkWell(
-      onTap: module.defused ? null : () => _openModule(module),
+      onTap: solved ? null : () => _openModule(index),
       child: Container(
         padding: const EdgeInsets.all(12),
         color: AppColors.card,
@@ -116,7 +113,7 @@ class _BombPageState extends State<BombPage> {
             Align(
               alignment: Alignment.topRight,
               child: StatusLed(
-                color: module.defused ? AppColors.success : AppColors.danger,
+                color: solved ? AppColors.success : AppColors.danger,
               ),
             ),
             Icon(module.type.icon, size: 40, color: color),
@@ -130,7 +127,13 @@ class _BombPageState extends State<BombPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isCritical = _timeLeft.inSeconds < 60;
+    final game = ref.watch(gameControllerProvider);
+    ref.listen<GameState>(gameControllerProvider, (previous, next) {
+      if (_ended) return;
+      if (next.status == BombEngineStatus.defused) _endGame(true);
+      if (next.status == BombEngineStatus.exploded) _endGame(false);
+    });
+    final isCritical = game.timeLeft.inSeconds < 60;
 
     // Back button / gesture asks first instead of silently quitting.
     return PopScope(
@@ -170,7 +173,7 @@ class _BombPageState extends State<BombPage> {
                     ),
                     const SizedBox(height: 8),
                     SegmentDisplay(
-                      text: formatTime(_timeLeft),
+                      text: formatTime(game.timeLeft),
                       color: isCritical ? AppColors.led : AppColors.amber,
                       height: 64,
                     ),
@@ -189,7 +192,7 @@ class _BombPageState extends State<BombPage> {
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: StatusLed(
-                        color: i < _strikes
+                        color: i < game.strikes
                             ? AppColors.danger
                             : AppColors.metalGrey,
                         size: 14,
@@ -209,7 +212,10 @@ class _BombPageState extends State<BombPage> {
                 physics: const NeverScrollableScrollPhysics(),
                 mainAxisSpacing: 16,
                 crossAxisSpacing: 16,
-                children: _modules.map(_buildModuleCard).toList(),
+                children: [
+                  for (var i = 0; i < _modules.length; i++)
+                    _buildModuleCard(i, _modules[i], game.solvedModules),
+                ],
               ),
             ],
           ),

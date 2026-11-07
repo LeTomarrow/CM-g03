@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:what_did_you_press/services/room_protocol.dart';
+import 'package:what_did_you_press/services/game_protocol.dart';
 
 void main() {
   test('host owns roles; guest applies state and cannot swap locally', () {
@@ -85,5 +86,21 @@ void main() {
     expect(guest.apply(wire), isTrue);
     expect(guest.locked, isTrue);
     expect(guest.hostRole, 'defuser');
+  });
+
+  test('game messages are session-bound and carry a typed payload', () {
+    const message = GameMessage(
+      session: 'abc',
+      type: 'snapshot',
+      revision: 4,
+      payload: {'timeLeftMs': 12000, 'strikes': 1},
+    );
+    final decoded = GameMessage.decode(message.encode(), 'abc');
+    expect(decoded.revision, 4);
+    expect(decoded.payload['strikes'], 1);
+    expect(
+      () => GameMessage.decode(message.encode(), 'other'),
+      throwsFormatException,
+    );
   });
 }

@@ -251,8 +251,9 @@ class _LobbyPageState extends State<LobbyPage> {
     final Widget page = role == PlayerRole.manual
         ? const ManualPage()
         : bombId == null
-        ? const BombPage()
+        ? BombPage(roomService: _rooms)
         : BombPage(
+            roomService: _rooms,
             // If this fails the claim lease expires and the bomb is re-armed.
             onFinished: (defused) => _bombs
                 .resolveBomb(
