@@ -110,20 +110,25 @@ class _BombPageState extends ConsumerState<BombPage> {
     return InkWell(
       onTap: module.solved ? null : () => _openModule(index),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
         color: AppColors.card,
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: StatusLed(
-                color: module.solved ? AppColors.success : AppColors.danger,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: StatusLed(
+                  color: module.solved ? AppColors.success : AppColors.danger,
+                ),
               ),
-            ),
-            Icon(module.type.icon, size: 40, color: color),
-            const SizedBox(height: 12),
-            Text(module.type.label, style: TextStyle(color: color)),
-          ],
+              const SizedBox(height: 4),
+              Icon(module.type.icon, size: 40, color: color),
+              const SizedBox(height: 8),
+              Text(module.type.label, style: TextStyle(color: color)),
+            ],
+          ),
         ),
       ),
     );
