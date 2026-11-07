@@ -37,14 +37,17 @@ class _BombPageState extends ConsumerState<BombPage> {
   @override
   void initState() {
     super.initState();
-    unawaited(
-      ref
-          .read(gameControllerProvider.notifier)
-          .start(
-            moduleCount: ModuleType.values.length,
-            roomService: widget.roomService,
-          ),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(
+        ref
+            .read(gameControllerProvider.notifier)
+            .start(
+              moduleCount: ModuleType.values.length,
+              roomService: widget.roomService,
+            ),
+      );
+    });
   }
 
   void _endGame(bool defused) {
