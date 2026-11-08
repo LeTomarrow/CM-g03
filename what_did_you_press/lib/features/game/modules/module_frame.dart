@@ -1,10 +1,13 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/core/widgets.dart';
+import 'package:what_did_you_press/core/segment_display.dart';
+import 'package:what_did_you_press/features/game/game_controller.dart';
 
 /// Shared layout for every bomb module: title, content and confirm button.
 /// Module pages pop `true` when solved and `false` on a wrong answer.
@@ -14,11 +17,13 @@ class ModuleFrame extends StatelessWidget {
     required this.type,
     required this.onConfirm,
     required this.children,
+    this.subtitle,
   });
 
   final ModuleType type;
   final void Function() onConfirm;
   final List<Widget> children;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -36,15 +41,103 @@ class ModuleFrame extends StatelessWidget {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.all(24.0),
-                children: children,
+                children: [
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final game = ref.watch(gameControllerProvider);
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: glowingCardDecoration(
+                          glowColor: type.color.withValues(alpha: 0.22),
+                          borderColor: type.color.withValues(alpha: 0.7),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(type.icon, color: type.color, size: 32),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'MÓDULO ATIVO',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12,
+                                          letterSpacing: 1.4,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        type.label,
+                                        style: TextStyle(
+                                          color: type.color,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'TEMPO',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 10,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                    SegmentDisplay(
+                                      text: formatTime(game.timeLeft),
+                                      color: game.timeLeft.inSeconds < 60
+                                          ? AppColors.led
+                                          : type.color,
+                                      height: 24,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                subtitle!,
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  ...children,
+                ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: MenuButton(
-                label: 'CONFIRMAR',
-                onPressed: onConfirm,
-                color: type.color,
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Container(
+                padding: const EdgeInsets.only(top: 8),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.metalGrey)),
+                ),
+                child: MenuButton(
+                  label: 'CONFIRMAR RESPOSTA',
+                  onPressed: onConfirm,
+                  color: type.color,
+                ),
               ),
             ),
           ],

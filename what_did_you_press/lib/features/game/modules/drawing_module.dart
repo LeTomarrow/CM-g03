@@ -6,9 +6,16 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/features/game/modules/module_frame.dart';
 
 class DrawingModulePage extends StatefulWidget {
-  const DrawingModulePage({super.key, this.variant = 0});
+  const DrawingModulePage({
+    super.key,
+    this.variant = 0,
+    this.onDrawingChanged,
+    this.onDrawingCompleted,
+  });
 
   final int variant;
+  final ValueChanged<List<Stroke>>? onDrawingChanged;
+  final ValueChanged<List<Stroke>>? onDrawingCompleted;
 
   @override
   State<DrawingModulePage> createState() => _DrawingModulePageState();
@@ -22,6 +29,7 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
   void initState() {
     super.initState();
     liveDrawing.value = [];
+    widget.onDrawingChanged?.call(const []);
   }
 
   void _confirm() {
@@ -61,6 +69,7 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
   Widget build(BuildContext context) {
     return ModuleFrame(
       type: ModuleType.drawing,
+      subtitle: 'Desenha o símbolo para o manual e corta o fio indicado.',
       onConfirm: _confirm,
       children: [
         Text(
@@ -70,7 +79,10 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
-          color: AppColors.card,
+          decoration: glowingCardDecoration(
+            glowColor: AppColors.neonPurple.withValues(alpha: 0.18),
+            borderColor: AppColors.neonPurple.withValues(alpha: 0.5),
+          ),
           child: Column(
             children: [
               Text('SÍMBOLO', style: TextStyle(color: AppColors.textSecondary)),
@@ -88,7 +100,11 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
         const SizedBox(height: 16),
         DrawingPad(
           color: AppColors.neonPurple,
-          onChanged: (strokes) => liveDrawing.value = strokes,
+          onChanged: (strokes) {
+            liveDrawing.value = strokes;
+            widget.onDrawingChanged?.call(strokes);
+          },
+          onStrokeEnd: widget.onDrawingCompleted,
         ),
         const SizedBox(height: 24),
         Text(

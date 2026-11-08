@@ -50,6 +50,7 @@ class _SymbolsModulePageState extends State<SymbolsModulePage> {
   Widget build(BuildContext context) {
     return ModuleFrame(
       type: ModuleType.symbols,
+      subtitle: 'Compara os símbolos com as regras do manual e seleciona um.',
       onConfirm: _confirm,
       children: [
         Text(
@@ -57,13 +58,19 @@ class _SymbolsModulePageState extends State<SymbolsModulePage> {
           style: TextStyle(color: AppColors.textSecondary, height: 1.5),
         ),
         const SizedBox(height: 24),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          children: List.generate(_tiles.length, _buildTile),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: glowingCardDecoration(
+            glowColor: AppColors.danger.withValues(alpha: 0.14),
+          ),
+          child: GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            children: List.generate(_tiles.length, _buildTile),
+          ),
         ),
       ],
     );

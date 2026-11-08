@@ -64,6 +64,31 @@ class HelpPage extends StatelessWidget {
               'Fala. Grita. Faz o que for preciso para passar a informação certa. O tempo está a acabar. "O que é que carregaste?!" podem ser as últimas palavras que ouves.',
               color: AppColors.success,
             ),
+            _buildCard(
+              'COMO COMEÇAR',
+              'No menu, corta Jogar. Um jogador cria a sala e partilha o código de seis dígitos; o outro introduz o código. Antes de começar podem trocar os papéis. O anfitrião inicia quando os dois aparecem como ligados.',
+              color: AppColors.neonBlue,
+            ),
+            _buildCard(
+              'OS MÓDULOS',
+              'O operador vê Ângulo, Bússola, Morse, Símbolos e Desenho. O leitor consulta as tabelas do manual e guia cada ação. Uma resposta errada dá um strike; três strikes ou tempo a zero fazem a bomba explodir.',
+              color: AppColors.neonPurple,
+            ),
+            _buildCard(
+              'HACKERS',
+              'Durante a partida podem surgir ataques: ecrã a piscar, vibração contínua ou apagão no manual. Abre o terminal, escreve ajuda/analisar e executa o comando indicado. No apagão, descodifica a senha de César e usa “energia --repor <senha>”.',
+              color: AppColors.danger,
+            ),
+            _buildCard(
+              'DESENHO EM DIRETO',
+              'No módulo Desenho, o operador desenha dentro da área. O leitor recebe o desenho em direto, compara-o com os símbolos do manual e indica a cor do fio. Limpa e redesenha se necessário antes de confirmar.',
+              color: AppColors.neonPurple,
+            ),
+            _buildCard(
+              'SALA E LIGAÇÃO',
+              'A sala usa uma ligação direta entre os dois dispositivos. Se alguém sair, a partida termina para o outro jogador e é preciso criar uma nova sala. Mantém ambos os dispositivos ligados à Internet e com a app aberta.',
+              color: AppColors.amber,
+            ),
           ],
         ),
       ),

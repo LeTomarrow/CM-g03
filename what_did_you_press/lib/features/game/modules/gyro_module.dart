@@ -29,14 +29,22 @@ class _GyroModulePageState extends State<GyroModulePage> {
   Widget build(BuildContext context) {
     return ModuleFrame(
       type: ModuleType.gyro,
+      subtitle: 'Alinha o indicador com o ângulo pedido pelo manual.',
       onConfirm: _confirm,
       children: [
         SequencePanel(sequence: _sequence, color: AppColors.neonBlue),
         const SizedBox(height: 32),
-        AimDial(
-          angle: _angle,
-          labels: const ['0', '45', '90', '135', '180', '225', '270', '315'],
-          color: AppColors.neonBlue,
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: glowingCardDecoration(
+            glowColor: AppColors.neonBlue.withValues(alpha: 0.18),
+            borderColor: AppColors.neonBlue.withValues(alpha: 0.5),
+          ),
+          child: AimDial(
+            angle: _angle,
+            labels: const ['0', '45', '90', '135', '180', '225', '270', '315'],
+            color: AppColors.neonBlue,
+          ),
         ),
         const SizedBox(height: 16),
         Text(

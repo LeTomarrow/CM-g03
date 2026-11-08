@@ -363,6 +363,12 @@ class _LobbyPageState extends State<LobbyPage> {
               ),
             ),
             const SizedBox(height: 16),
+            if (_room != null)
+              Row(children: [
+                Expanded(child: IgnorePointer(ignoring: _busy || !_isHost || _openingGame || _room!.status != 'ready', child: Opacity(opacity: _busy || !_isHost || _openingGame || _room!.status != 'ready' ? 0.5 : 1, child: MenuButton(label: _room!.status == 'ready' ? (_isHost ? 'COMEÇAR JOGO' : 'À ESPERA DO ANFITRIÃO') : 'A AGUARDAR JOGADOR', onPressed: _startGame, color: AppColors.success)))),
+                const SizedBox(width: 12),
+                Expanded(child: IgnorePointer(ignoring: _busy, child: Opacity(opacity: _busy ? 0.5 : 1, child: MenuButton(label: _isHost ? 'ENCERRAR SALA' : 'SAIR DA SALA', onPressed: _leaveRoom, color: _isHost ? AppColors.danger : AppColors.metalGrey)))),
+              ]),
             IgnorePointer(
               ignoring: _rolesFixed,
               child: Opacity(
@@ -450,32 +456,8 @@ class _LobbyPageState extends State<LobbyPage> {
                       : 'A LIGAR AO OUTRO JOGADOR...',
               }, style: TextStyle(color: AppColors.textSecondary)),
               const SizedBox(height: 16),
-              IgnorePointer(
-                ignoring: _busy,
-                child: Opacity(
-                  opacity: _busy ? 0.5 : 1,
-                  child: MenuButton(
-                    label: _isHost ? 'ENCERRAR SALA' : 'SAIR DA SALA',
-                    onPressed: _leaveRoom,
-                    color: _isHost ? AppColors.danger : AppColors.metalGrey,
-                  ),
-                ),
-              ),
             ],
             const SizedBox(height: 40),
-            IgnorePointer(
-              ignoring: _busy || !_isHost || _openingGame,
-              child: Opacity(
-                opacity: _busy || !_isHost || _openingGame ? 0.5 : 1,
-                child: MenuButton(
-                  label: _room != null && !_isHost
-                      ? 'À ESPERA DO ANFITRIÃO'
-                      : 'COMEÇAR',
-                  onPressed: _startGame,
-                  color: AppColors.danger,
-                ),
-              ),
-            ),
           ],
         ),
       ),

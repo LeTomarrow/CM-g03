@@ -81,11 +81,15 @@ class _MorseModulePageState extends State<MorseModulePage> {
 
     return ModuleFrame(
       type: ModuleType.morse,
+      subtitle: 'Recebe o sinal, descodifica a palavra e escolhe a frequência.',
       onConfirm: _confirm,
       children: [
         Container(
           padding: const EdgeInsets.all(24),
-          color: AppColors.card,
+          decoration: glowingCardDecoration(
+            glowColor: AppColors.success.withValues(alpha: 0.18),
+            borderColor: AppColors.success.withValues(alpha: 0.5),
+          ),
           child: Column(
             children: [
               StatusLed(

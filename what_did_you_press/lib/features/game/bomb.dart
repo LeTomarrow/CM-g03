@@ -17,6 +17,7 @@ import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/services/room_service.dart';
+import 'package:what_did_you_press/features/app_state.dart';
 
 class BombPage extends ConsumerStatefulWidget {
   const BombPage({super.key, this.onFinished, this.roomService});
@@ -47,14 +48,26 @@ class _BombPageState extends ConsumerState<BombPage> {
               roomService: widget.roomService,
             ),
       );
+      final name = ref.read(profileProvider).asData?.value.name;
+      if (name != null) ref.read(gameControllerProvider.notifier).publishPlayerName(name);
     });
   }
 
-  void _endGame(bool defused) {
+  Future<void> _endGame(bool defused, {String reason = 'game_finished'}) async {
     if (_ended) return;
     _ended = true;
     final game = ref.read(gameControllerProvider);
+    unawaited(ref.read(profileProvider.notifier).recordGame(defused: defused));
     widget.onFinished?.call(defused);
+    try {
+      await ref.read(gameControllerProvider.notifier).publishGameEnded(
+        defused,
+        reason: reason,
+      );
+    } catch (_) {
+      // Local result must still be shown if the peer has already disconnected.
+    }
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => ResultPage(
@@ -72,7 +85,7 @@ class _BombPageState extends ConsumerState<BombPage> {
       context,
       'A bomba explode e o jogo conta como perdido.',
     );
-    if (leave && mounted) _endGame(false);
+    if (leave && mounted) unawaited(_endGame(false, reason: 'operator_left'));
   }
 
   Widget _pageFor(ModuleType type, int variant) {
@@ -81,7 +94,15 @@ class _BombPageState extends ConsumerState<BombPage> {
       ModuleType.compass => CompassModulePage(variant: variant),
       ModuleType.morse => MorseModulePage(variant: variant),
       ModuleType.symbols => SymbolsModulePage(variant: variant),
-      ModuleType.drawing => DrawingModulePage(variant: variant),
+      ModuleType.drawing => DrawingModulePage(
+        variant: variant,
+        onDrawingChanged: ref
+            .read(gameControllerProvider.notifier)
+            .publishDrawing,
+        onDrawingCompleted: ref
+            .read(gameControllerProvider.notifier)
+            .publishDrawingSnapshot,
+      ),
     };
   }
 
@@ -90,13 +111,15 @@ class _BombPageState extends ConsumerState<BombPage> {
         .read(gameControllerProvider)
         .loadout
         .modules[moduleIndex];
+    final controller = ref.read(gameControllerProvider.notifier);
+    controller.publishModuleFocus(moduleIndex);
     final solved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) => _pageFor(module.type, module.variant),
       ),
     );
+    controller.publishModuleFocus(null);
     if (!mounted || solved == null) return;
-    final controller = ref.read(gameControllerProvider.notifier);
     if (solved) {
       controller.solveModule(moduleIndex);
     } else {
@@ -111,7 +134,21 @@ class _BombPageState extends ConsumerState<BombPage> {
       onTap: module.solved ? null : () => _openModule(index),
       child: Container(
         padding: const EdgeInsets.all(8),
-        color: AppColors.card,
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: module.solved ? AppColors.success : module.type.color,
+            width: module.solved ? 1 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (module.solved ? AppColors.success : module.type.color)
+                  .withValues(alpha: 0.12),
+              blurRadius: 12,
+            ),
+          ],
+        ),
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Column(
@@ -139,8 +176,12 @@ class _BombPageState extends ConsumerState<BombPage> {
     final game = ref.watch(gameControllerProvider);
     ref.listen<GameState>(gameControllerProvider, (previous, next) {
       if (_ended) return;
-      if (next.status == BombEngineStatus.defused) _endGame(true);
-      if (next.status == BombEngineStatus.exploded) _endGame(false);
+      if (next.status == BombEngineStatus.defused) {
+        unawaited(_endGame(true));
+      }
+      if (next.status == BombEngineStatus.exploded) {
+        unawaited(_endGame(false));
+      }
     });
     final isCritical = game.timeLeft.inSeconds < 60;
 
@@ -155,7 +196,7 @@ class _BombPageState extends ConsumerState<BombPage> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           foregroundColor: AppColors.danger,
-          title: Text('BOMBA'),
+          title: Text('BOMBA · ${game.playerName}'),
           actions: const [
             Padding(
               padding: EdgeInsets.only(right: 16),
@@ -219,6 +260,17 @@ class _BombPageState extends ConsumerState<BombPage> {
                 Text(
                   'O MANUAL ESTÁ A CONSULTAR: ${game.loadout.modules[game.manualFocus!].type.label}',
                   style: const TextStyle(color: AppColors.neonBlue),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (game.connectionNotice != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  color: AppColors.danger.withValues(alpha: 0.2),
+                  child: Text(
+                    game.connectionNotice!,
+                    style: const TextStyle(color: AppColors.danger),
+                  ),
                 ),
                 const SizedBox(height: 12),
               ],

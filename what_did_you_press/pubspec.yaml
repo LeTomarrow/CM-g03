@@ -16,6 +16,8 @@ dependencies:
   flutter_webrtc: ^1.6.2+hotfix.4
   geolocator: ^14.1.2
   google_fonts: ^8.2.1
+  image_picker: ^1.1.2
+  shared_preferences: ^2.5.3
   sensors_plus: ^7.1.1
   vibration: ^3.2.1
 

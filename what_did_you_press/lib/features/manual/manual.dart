@@ -11,7 +11,10 @@ import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/manual/terminal.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
+import 'package:what_did_you_press/features/game/bomb_engine.dart';
+import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/services/room_service.dart';
+import 'package:what_did_you_press/features/app_state.dart';
 
 class ManualPage extends ConsumerStatefulWidget {
   const ManualPage({super.key, this.roomService});
@@ -24,6 +27,11 @@ class ManualPage extends ConsumerStatefulWidget {
 
 class _ManualPageState extends ConsumerState<ManualPage> {
   HackType? _activeHack;
+  String? _shownConnectionNotice;
+  final ScrollController _scrollController = ScrollController();
+  final Map<ModuleType, GlobalKey> _sectionKeys = {
+    for (final type in ModuleType.values) type: GlobalKey(),
+  };
 
   @override
   void initState() {
@@ -39,23 +47,57 @@ class _ManualPageState extends ConsumerState<ManualPage> {
               authority: false,
             ),
       );
+      final name = ref.read(profileProvider).asData?.value.name;
+      if (name != null) ref.read(gameControllerProvider.notifier).publishPlayerName(name);
     });
   }
 
-  // Mockup only: in the real game the hack comes from the other device.
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToDefuserModule(GameState next) {
+    final index = next.activeModule;
+    if (index == null || index < 0 || index >= next.loadout.modules.length) {
+      return;
+    }
+    final key = _sectionKeys[next.loadout.modules[index].type];
+    final target = key?.currentContext;
+    if (target == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Scrollable.ensureVisible(
+          target,
+          duration: const Duration(milliseconds: 350),
+          alignment: 0.12,
+        );
+      }
+    });
+  }
+
   void _simulateHack() {
     final hacks = HackType.values;
-    setState(() => _activeHack = hacks[Random().nextInt(hacks.length)]);
+    final hack = hacks[Random().nextInt(hacks.length)];
+    setState(() => _activeHack = hack);
+    ref.read(gameControllerProvider.notifier).publishHack(hack.name);
   }
 
   Future<void> _openTerminal() async {
+    final remote = ref.read(gameControllerProvider).activeHack;
+    final active = _activeHack ??
+        (remote == null
+            ? null
+            : HackType.values.where((item) => item.name == remote).firstOrNull);
     final countered = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (context) => TerminalPage(activeHack: _activeHack),
+        builder: (context) => TerminalPage(activeHack: active),
       ),
     );
     if (!mounted || countered != true) return;
     setState(() => _activeHack = null);
+    ref.read(gameControllerProvider.notifier).clearHack();
   }
 
   Future<void> _confirmLeave() async {
@@ -66,11 +108,28 @@ class _ManualPageState extends ConsumerState<ManualPage> {
     if (leave && mounted) Navigator.of(context).pop();
   }
 
-  Widget _buildSection(String title, Color color, List<Widget> children) {
+  Widget _buildSection(
+    String title,
+    Color color,
+    List<Widget> children, {
+    Key? key,
+    bool highlighted = false,
+  }) {
     return Container(
+      key: key,
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
-      color: AppColors.card,
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: highlighted ? color : AppColors.metalGrey,
+          width: highlighted ? 2 : 1,
+        ),
+        boxShadow: highlighted
+            ? [BoxShadow(color: color.withValues(alpha: 0.22), blurRadius: 18)]
+            : null,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -158,6 +217,18 @@ class _ManualPageState extends ConsumerState<ManualPage> {
     final game = ref.watch(gameControllerProvider);
     final controller = ref.read(gameControllerProvider.notifier);
     return _buildSection('BOMBA EM DIRETO', AppColors.danger, [
+      if (game.connectionNotice != null)
+        Text(
+          game.connectionNotice!,
+          style: const TextStyle(color: AppColors.danger),
+        ),
+      if (game.status == BombEngineStatus.defused)
+        const Text(
+          'BOMBA DESARMADA',
+          style: TextStyle(color: AppColors.success),
+        ),
+      if (game.status == BombEngineStatus.exploded)
+        const Text('BOMBA EXPLODIU', style: TextStyle(color: AppColors.danger)),
       _buildRow('TEMPO', formatTime(game.timeLeft)),
       _buildRow('STRIKES', '${game.strikes}/3'),
       for (var index = 0; index < game.loadout.modules.length; index++)
@@ -233,6 +304,51 @@ class _ManualPageState extends ConsumerState<ManualPage> {
   @override
   Widget build(BuildContext context) {
     final hack = _activeHack;
+    final game = ref.watch(gameControllerProvider);
+    final remoteHack = game.activeHack;
+    final visibleHack = remoteHack == null
+        ? hack
+        : HackType.values.where((item) => item.name == remoteHack).firstOrNull;
+    ref.listen<GameState>(gameControllerProvider, (_, next) {
+      _scrollToDefuserModule(next);
+      final notice = next.connectionNotice;
+      if (notice == null || notice == _shownConnectionNotice || !mounted) return;
+      _shownConnectionNotice = notice;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final pageNavigator = Navigator.of(context);
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppColors.card,
+            title: Text(
+              notice == 'A bomba foi desarmada.' || notice == 'A bomba explodiu.'
+                  ? 'FIM DE JOGO'
+                  : 'LIGAÇÃO TERMINADA',
+            ),
+            content: Text(notice),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  notice == 'A bomba foi desarmada.' || notice == 'A bomba explodiu.'
+                      ? 'VOLTAR AO MENU'
+                      : 'VOLTAR AO MENU',
+                ),
+              ),
+            ],
+          ),
+        ).then((_) {
+          if (mounted && pageNavigator.canPop()) pageNavigator.pop();
+        });
+      });
+    });
+    final activeType =
+        game.activeModule == null ||
+            game.activeModule! >= game.loadout.modules.length
+        ? null
+        : game.loadout.modules[game.activeModule!].type;
 
     return PopScope(
       canPop: false,
@@ -244,7 +360,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           foregroundColor: AppColors.neonBlue,
-          title: Text('MANUAL'),
+          title: Text('MANUAL · ${game.partnerName}'),
           actions: [
             IconButton(
               icon: const Icon(Icons.bug_report),
@@ -262,18 +378,25 @@ class _ManualPageState extends ConsumerState<ManualPage> {
           child: Stack(
             children: [
               ListView(
+                controller: _scrollController,
                 padding: const EdgeInsets.all(24.0),
                 children: [
                   if (widget.roomService != null) _buildBombStatus(),
-                  if (hack != null) ...[
-                    _buildHackBanner(hack),
+                  if (visibleHack != null) ...[
+                    _buildHackBanner(visibleHack),
                     const SizedBox(height: 24),
                   ],
-                  _buildSection(ModuleType.gyro.label, ModuleType.gyro.color, [
-                    _buildText('Aponta o telemóvel para o ângulo indicado.'),
-                    for (final entry in angleTable.entries)
-                      _buildRow(entry.key, '${entry.value}°'),
-                  ]),
+                  _buildSection(
+                    ModuleType.gyro.label,
+                    ModuleType.gyro.color,
+                    [
+                      _buildText('Aponta o telemóvel para o ângulo indicado.'),
+                      for (final entry in angleTable.entries)
+                        _buildRow(entry.key, '${entry.value}°'),
+                    ],
+                    key: _sectionKeys[ModuleType.gyro],
+                    highlighted: activeType == ModuleType.gyro,
+                  ),
                   _buildSection(
                     ModuleType.compass.label,
                     ModuleType.compass.color,
@@ -282,6 +405,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                       for (final entry in compassTable.entries)
                         _buildRow(entry.key, entry.value),
                     ],
+                    key: _sectionKeys[ModuleType.compass],
+                    highlighted: activeType == ModuleType.compass,
                   ),
                   _buildSection(
                     ModuleType.morse.label,
@@ -305,6 +430,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                         ],
                       ),
                     ],
+                    key: _sectionKeys[ModuleType.morse],
+                    highlighted: activeType == ModuleType.morse,
                   ),
                   _buildSection(
                     ModuleType.symbols.label,
@@ -313,6 +440,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                       for (int i = 0; i < symbolRules.length; i++)
                         _buildText('${i + 1}. ${symbolRules[i]}'),
                     ],
+                    key: _sectionKeys[ModuleType.symbols],
+                    highlighted: activeType == ModuleType.symbols,
                   ),
                   _buildSection(
                     ModuleType.drawing.label,
@@ -354,6 +483,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                         ],
                       ),
                     ],
+                    key: _sectionKeys[ModuleType.drawing],
+                    highlighted: activeType == ModuleType.drawing,
                   ),
                   _buildSection('HACKERS', AppColors.textPrimary, [
                     for (final type in HackType.values)
@@ -367,7 +498,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                   ]),
                 ],
               ),
-              if (hack == HackType.lights)
+              if (visibleHack == HackType.lights)
                 Positioned.fill(child: _buildBlackout()),
             ],
           ),

@@ -31,9 +31,15 @@ class DrawingView extends StatelessWidget {
 
 /// Square canvas the player draws on with one finger.
 class DrawingPad extends StatefulWidget {
-  const DrawingPad({super.key, required this.onChanged, required this.color});
+  const DrawingPad({
+    super.key,
+    required this.onChanged,
+    this.onStrokeEnd,
+    required this.color,
+  });
 
   final void Function(List<Stroke> strokes) onChanged;
+  final void Function(List<Stroke> strokes)? onStrokeEnd;
   final Color color;
 
   @override
@@ -94,10 +100,16 @@ class _DrawingPadState extends State<DrawingPad> {
                     );
                   },
                   onPointerUp: (event) {
-                    if (event.pointer == _pointer) _pointer = null;
+                    if (event.pointer == _pointer) {
+                      _pointer = null;
+                      widget.onStrokeEnd?.call(List.of(_strokes));
+                    }
                   },
                   onPointerCancel: (event) {
-                    if (event.pointer == _pointer) _pointer = null;
+                    if (event.pointer == _pointer) {
+                      _pointer = null;
+                      widget.onStrokeEnd?.call(List.of(_strokes));
+                    }
                   },
                   child: Container(
                     decoration: BoxDecoration(

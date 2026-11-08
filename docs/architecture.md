@@ -445,6 +445,11 @@ primeira versão já mostra tempo, strikes, módulos, variantes e falhas. Os
 comandos específicos dos módulos ainda devem ser adicionados sem permitir que
 o manual se torne autoridade do jogo.
 
+O módulo de desenho já usa uma mensagem `drawing` separada: os strokes
+normalizados são enviados com limitação de frequência e o manual atualiza o
+desenho em direto. O desenho é estado de apresentação, não estado autoritário
+da bomba.
+
 ## 10. Protocolos de comunicação
 
 ### Lobby protocol
@@ -567,6 +572,10 @@ Ainda por implementar:
 - sincronização dos resultados no manual;
 - testes isolados do `GameController`;
 - testes de integração entre dois peers reais.
+
+A reconexão automática continua deliberadamente fora do protocolo atual. Como
+o mailbox de signaling é removido depois do handshake final, uma reconexão
+segura exige uma versão própria do protocolo de sessão.
 
 ## 14. Próximos passos recomendados
 

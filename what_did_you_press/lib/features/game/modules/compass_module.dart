@@ -29,14 +29,22 @@ class _CompassModulePageState extends State<CompassModulePage> {
   Widget build(BuildContext context) {
     return ModuleFrame(
       type: ModuleType.compass,
+      subtitle: 'Usa a bússola e aponta para o ponto cardeal indicado.',
       onConfirm: _confirm,
       children: [
         SequencePanel(sequence: _sequence, color: AppColors.amber),
         const SizedBox(height: 32),
-        AimDial(
-          angle: _heading,
-          labels: cardinalAngles.keys.toList(),
-          color: AppColors.amber,
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: glowingCardDecoration(
+            glowColor: AppColors.amber.withValues(alpha: 0.18),
+            borderColor: AppColors.amber.withValues(alpha: 0.5),
+          ),
+          child: AimDial(
+            angle: _heading,
+            labels: cardinalAngles.keys.toList(),
+            color: AppColors.amber,
+          ),
         ),
         const SizedBox(height: 16),
         Text(
