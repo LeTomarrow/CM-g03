@@ -9,8 +9,8 @@ class GameMessage {
     this.payload = const <String, dynamic>{},
   });
 
-  static const maxBytes = 8192;
-  static const types = {'snapshot', 'command', 'ended', 'ping'};
+  static const maxBytes = 32768;
+  static const types = {'snapshot', 'command', 'drawing', 'ended', 'ping', 'hack'};
 
   final String session;
   final String type;

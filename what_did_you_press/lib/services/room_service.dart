@@ -378,6 +378,14 @@ class RoomService {
             _startAck!.complete();
           }
         case 'closed':
+          _gameEvents.add(
+            GameMessage(
+              session: protocol.session,
+              type: 'ended',
+              revision: protocol.revision,
+              payload: {'reason': 'opponent_left'},
+            ),
+          );
           _fail(_error('O outro jogador saiu.'));
       }
     } else if (protocol.apply(message)) {
@@ -512,6 +520,16 @@ class RoomService {
 
   void _fail(Object error) {
     if (_disposed || _protocol?.phase == 'closed') return;
+    if (_protocol?.phase == 'playing') {
+      _gameEvents.add(
+        GameMessage(
+          session: _protocol!.session,
+          type: 'ended',
+          revision: _protocol!.revision,
+          payload: {'reason': 'connection_lost'},
+        ),
+      );
+    }
     _protocol?.phase = 'closed';
     _connectionTimer?.cancel();
     _startTimer?.cancel();
