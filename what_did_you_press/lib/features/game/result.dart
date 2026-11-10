@@ -10,11 +10,15 @@ class ResultPage extends StatelessWidget {
     required this.defused,
     required this.timeLeft,
     required this.strikes,
+    this.abandoned = false,
+    this.notice,
   });
 
   final bool defused;
   final Duration timeLeft;
   final int strikes;
+  final bool abandoned;
+  final String? notice;
 
   Widget _buildStat(String label, String value, Color color) {
     return Expanded(
@@ -37,7 +41,11 @@ class ResultPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = defused ? AppColors.success : AppColors.danger;
+    final color = abandoned
+        ? AppColors.amber
+        : defused
+        ? AppColors.success
+        : AppColors.danger;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -49,19 +57,29 @@ class ResultPage extends StatelessWidget {
             children: [
               const Spacer(),
               Icon(
-                defused ? Icons.verified_user : Icons.local_fire_department,
+                abandoned
+                    ? Icons.link_off
+                    : defused
+                    ? Icons.verified_user
+                    : Icons.local_fire_department,
                 size: 96,
                 color: color,
               ),
               const SizedBox(height: 24),
               Text(
-                defused ? 'DESARMADA' : 'BOOM!',
+                abandoned
+                    ? 'PARTIDA ABANDONADA'
+                    : defused
+                    ? 'DESARMADA'
+                    : 'BOOM!',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: color, fontSize: 40),
+                style: TextStyle(color: color, fontSize: abandoned ? 28 : 40),
               ),
               const SizedBox(height: 8),
               Text(
-                defused
+                abandoned
+                    ? notice ?? 'A ligação ao teu parceiro terminou.'
+                    : defused
                     ? 'Bom trabalho de equipa.'
                     : 'O que é que carregaste?!',
                 textAlign: TextAlign.center,

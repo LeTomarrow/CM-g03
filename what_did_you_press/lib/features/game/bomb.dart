@@ -49,7 +49,9 @@ class _BombPageState extends ConsumerState<BombPage> {
             ),
       );
       final name = ref.read(profileProvider).asData?.value.name;
-      if (name != null) ref.read(gameControllerProvider.notifier).publishPlayerName(name);
+      if (name != null) {
+        ref.read(gameControllerProvider.notifier).publishPlayerName(name);
+      }
     });
   }
 
@@ -57,13 +59,17 @@ class _BombPageState extends ConsumerState<BombPage> {
     if (_ended) return;
     _ended = true;
     final game = ref.read(gameControllerProvider);
-    unawaited(ref.read(profileProvider.notifier).recordGame(defused: defused));
+    final abandoned = game.status == BombEngineStatus.abandoned;
+    if (!abandoned) {
+      unawaited(
+        ref.read(profileProvider.notifier).recordGame(defused: defused),
+      );
+    }
     widget.onFinished?.call(defused);
     try {
-      await ref.read(gameControllerProvider.notifier).publishGameEnded(
-        defused,
-        reason: reason,
-      );
+      await ref
+          .read(gameControllerProvider.notifier)
+          .publishGameEnded(defused, reason: reason);
     } catch (_) {
       // Local result must still be shown if the peer has already disconnected.
     }
@@ -74,6 +80,8 @@ class _BombPageState extends ConsumerState<BombPage> {
           defused: defused,
           timeLeft: game.timeLeft,
           strikes: game.strikes,
+          abandoned: abandoned,
+          notice: abandoned ? game.connectionNotice : null,
         ),
       ),
       (route) => route.isFirst,
@@ -178,6 +186,9 @@ class _BombPageState extends ConsumerState<BombPage> {
       if (_ended) return;
       if (next.status == BombEngineStatus.defused) {
         unawaited(_endGame(true));
+      }
+      if (next.status == BombEngineStatus.abandoned) {
+        unawaited(_endGame(false, reason: 'opponent_left'));
       }
       if (next.status == BombEngineStatus.exploded) {
         unawaited(_endGame(false));

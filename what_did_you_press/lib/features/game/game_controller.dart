@@ -56,7 +56,7 @@ class GameController extends Notifier<GameState> {
       moduleCount: moduleCount,
       maxStrikes: 3,
     );
-    if (!ref.mounted) {
+    if (!ref.mounted || state.status != BombEngineStatus.running) {
       await engine.dispose();
       return;
     }
@@ -93,18 +93,25 @@ class GameController extends Notifier<GameState> {
     state = state.copyWith(playerName: value);
     final service = _roomService;
     if (service == null) return;
-    unawaited(service.sendGameMessage(
-      type: 'command', revision: _revision++,
-      payload: {'command': 'player_name', 'name': value},
-    ));
+    unawaited(
+      service.sendGameMessage(
+        type: 'command',
+        revision: _revision++,
+        payload: {'command': 'player_name', 'name': value},
+      ),
+    );
   }
 
   void publishHack(String hack) {
     final service = _roomService;
     if (service == null) return;
-    unawaited(service.sendGameMessage(
-      type: 'hack', revision: _revision++, payload: {'hack': hack},
-    ));
+    unawaited(
+      service.sendGameMessage(
+        type: 'hack',
+        revision: _revision++,
+        payload: {'hack': hack},
+      ),
+    );
   }
 
   void clearHack() => state = state.copyWith(clearHack: true);
@@ -125,7 +132,10 @@ class GameController extends Notifier<GameState> {
     );
   }
 
-  Future<void> publishGameEnded(bool defused, {String reason = 'game_finished'}) async {
+  Future<void> publishGameEnded(
+    bool defused, {
+    String reason = 'game_finished',
+  }) async {
     final service = _roomService;
     if (service == null) return;
     await service.sendGameMessage(
@@ -133,7 +143,8 @@ class GameController extends Notifier<GameState> {
       revision: _revision++,
       payload: {
         'reason': reason,
-        if (reason == 'game_finished') 'status': defused ? 'defused' : 'exploded',
+        if (reason == 'game_finished')
+          'status': defused ? 'defused' : 'exploded',
       },
     );
   }
@@ -214,14 +225,18 @@ class GameController extends Notifier<GameState> {
     }
     if (message.type == 'ended') {
       final reason = message.payload['reason'];
-      if (state.connectionNotice != null) {
+      if (state.connectionNotice != null ||
+          (state.status != BombEngineStatus.running &&
+              reason != 'game_finished')) {
         return;
       }
       final status = message.payload['status'];
       state = state.copyWith(
         status: reason == 'game_finished' && status is String
             ? BombEngineStatus.values.byName(status)
-            : BombEngineStatus.running,
+            : _engine == null
+            ? BombEngineStatus.abandoned
+            : state.status,
         connectionNotice: switch (reason) {
           'game_finished' =>
             status == 'defused'
@@ -233,6 +248,12 @@ class GameController extends Notifier<GameState> {
           _ => 'A sessão foi encerrada.',
         },
       );
+      if (reason != 'game_finished') {
+        _drawingTimer?.cancel();
+        _drawingTimer = null;
+        _pendingDrawing = null;
+        _engine?.abandon();
+      }
       return;
     }
     if (message.type == 'snapshot') {
@@ -305,7 +326,11 @@ class GameController extends Notifier<GameState> {
   ];
 
   void _applyRemoteSnapshot(GameMessage message) {
-    if (!ref.mounted || message.revision <= _lastRemoteRevision) return;
+    if (!ref.mounted ||
+        state.connectionNotice != null ||
+        message.revision <= _lastRemoteRevision) {
+      return;
+    }
     final payload = message.payload;
     final modules = payload['modules'];
     final seed = payload['seed'];
@@ -363,6 +388,7 @@ class GameController extends Notifier<GameState> {
     final service = _roomService;
     final second = next.timeLeft.inSeconds;
     if (service == null ||
+        state.connectionNotice != null ||
         (_lastPublishedSecond == second &&
             next.status == BombEngineStatus.running)) {
       return;

@@ -17,7 +17,7 @@ class BombEngineState {
   final BombEngineStatus status;
 }
 
-enum BombEngineStatus { running, defused, exploded }
+enum BombEngineStatus { running, defused, exploded, abandoned }
 
 /// Authoritative timer and score, created only on the defuser device.
 class BombEngine {
@@ -66,6 +66,8 @@ class BombEngine {
 
   void registerStrike(int moduleIndex) =>
       _commands.send({'command': 'strike', 'index': moduleIndex});
+
+  void abandon() => _commands.send({'command': 'abandon'});
 
   Future<void> dispose() async {
     _commands.send({'command': 'dispose'});
@@ -129,6 +131,10 @@ void _run(Map<String, dynamic> args) {
         strikes++;
         failureCounts[index] = (failureCounts[index] ?? 0) + 1;
         if (strikes >= maxStrikes) status = BombEngineStatus.exploded;
+        emit();
+      case 'abandon':
+        status = BombEngineStatus.abandoned;
+        timer.cancel();
         emit();
       case 'dispose':
         timer.cancel();

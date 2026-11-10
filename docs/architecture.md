@@ -424,6 +424,21 @@ GameController atualiza GameState
 Snapshot enviado ao Manual
 ```
 
+### Abandono da partida
+
+A saída do parceiro ou a perda de ligação chega ao `GameController` como uma
+mensagem `ended`. No operador, o controller pede `BombEngine.abandon()`; o
+engine cancela o timer, passa ao estado terminal `abandoned` e ignora novos
+inputs. O estado final regressa pelo fluxo habitual `EngineStateReceived →
+GameState → BombPage`. A View apresenta a `ResultPage` com o motivo da saída,
+sem decidir o estado do engine. Eventos de ligação repetidos não substituem
+um resultado concluído e os snapshots deixam de ser publicados após a saída.
+
+As estatísticas continuam a ser registadas apenas no perfil do operador.
+Uma partida abandonada não conta como bomba desarmada ou explodida. No modo
+mundo, mantém-se a resolução existente da bomba como tentativa sem sucesso.
+O manual mantém o diálogo de fim de sessão e regresso ao menu.
+
 ### Snapshot para o manual
 
 ```text
