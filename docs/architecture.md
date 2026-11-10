@@ -636,3 +636,30 @@ Antes de adicionar uma funcionalidade, responder:
 6. O que acontece se a mensagem chegar atrasada, duplicada ou fora de ordem?
 
 Se estas respostas estiverem claras, a funcionalidade deve encaixar naturalmente nas camadas existentes sem aumentar a responsabilidade dos widgets.
+
+## Bússola: sensor e alinhamento
+
+O package `precise_compass` 0.2.0 requer Flutter >=3.44.0 e Dart >=3.12.0.
+
+`CompassService` encapsula o package `precise_compass` e publica amostras
+imutáveis com rumo magnético, precisão estimada e indicação de calibração.
+Não pede localização para obter norte magnético. Android e iOS são suportados;
+web e desktop apresentam o estado de sensor indisponível.
+
+`compassHeadingProvider` gere a subscrição do sensor. `CompassController`
+captura o rumo apenas enquanto o jogador mantém **MANTER PARA ALINHAR**
+premido; ao soltar ou cancelar o gesto, fixa a amostra. O ponteiro e a resposta
+usam essa mesma amostra, mesmo que o telemóvel se mova depois. Os providers
+são `autoDispose`, libertando o sensor ao fechar o módulo.
+
+A confirmação exige uma amostra válida e o botão de alinhamento solto.
+Se o sensor indicar calibração ou uma incerteza superior à tolerância de 15°,
+a confirmação fica desativada até o jogador captar uma leitura melhor.
+Dispositivos sem estimativa de precisão podem usar o rumo disponível.
+O resultado segue o fluxo existente do módulo para o `GameController` e o
+`BombEngine`; não se transmite nem persiste o stream do sensor.
+
+Teste num telemóvel real: abrir BÚSSOLA, manter o botão premido, rodar o
+telemóvel na horizontal e soltar. Rodar novamente deve manter o ponteiro
+fixo; voltar a premir permite ajustar. A calibração física (movimento em 8,
+afastado de ímanes/metal) é distinta de fixar a resposta.

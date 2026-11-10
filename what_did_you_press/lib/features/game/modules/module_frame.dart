@@ -18,12 +18,14 @@ class ModuleFrame extends StatelessWidget {
     required this.onConfirm,
     required this.children,
     this.subtitle,
+    this.confirmEnabled = true,
   });
 
   final ModuleType type;
   final void Function() onConfirm;
   final List<Widget> children;
   final String? subtitle;
+  final bool confirmEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -133,10 +135,16 @@ class ModuleFrame extends StatelessWidget {
                 decoration: const BoxDecoration(
                   border: Border(top: BorderSide(color: AppColors.metalGrey)),
                 ),
-                child: MenuButton(
-                  label: 'CONFIRMAR RESPOSTA',
-                  onPressed: onConfirm,
-                  color: type.color,
+                child: IgnorePointer(
+                  ignoring: !confirmEnabled,
+                  child: Opacity(
+                    opacity: confirmEnabled ? 1 : 0.5,
+                    child: MenuButton(
+                      label: 'CONFIRMAR RESPOSTA',
+                      onPressed: onConfirm,
+                      color: type.color,
+                    ),
+                  ),
                 ),
               ),
             ),
