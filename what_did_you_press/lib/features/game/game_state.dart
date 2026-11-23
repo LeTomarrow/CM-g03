@@ -15,6 +15,8 @@ class GameState {
     this.partnerName = 'Parceiro',
     this.activeHack,
     this.started = false,
+    this.partnerSilent = false,
+    this.partnerAway = false,
   });
 
   factory GameState.initial() => GameState(
@@ -36,6 +38,24 @@ class GameState {
   final String? activeHack;
   final bool started;
 
+  /// No message from the partner for a few seconds.
+  final bool partnerSilent;
+
+  /// The partner reported that their app went to the background.
+  final bool partnerAway;
+
+  /// Visible warning while the session is still running, if any.
+  String? get linkWarning {
+    if (connectionNotice != null) return null;
+    if (partnerAway) {
+      return 'O parceiro saiu da app. A bomba continua a contar.';
+    }
+    if (partnerSilent) {
+      return 'Sem resposta do parceiro. A tentar manter a ligação…';
+    }
+    return null;
+  }
+
   GameState copyWith({
     Duration? timeLeft,
     int? strikes,
@@ -50,6 +70,8 @@ class GameState {
     String? partnerName,
     String? activeHack,
     bool clearHack = false,
+    bool? partnerSilent,
+    bool? partnerAway,
   }) => GameState(
     timeLeft: timeLeft ?? this.timeLeft,
     strikes: strikes ?? this.strikes,
@@ -62,5 +84,7 @@ class GameState {
     playerName: playerName ?? this.playerName,
     partnerName: partnerName ?? this.partnerName,
     activeHack: clearHack ? null : activeHack ?? this.activeHack,
+    partnerSilent: partnerSilent ?? this.partnerSilent,
+    partnerAway: partnerAway ?? this.partnerAway,
   );
 }

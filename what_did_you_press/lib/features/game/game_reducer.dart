@@ -25,6 +25,19 @@ GameState reduceEngineState(GameState state, BombEngineState next) {
   );
 }
 
+/// Whether solved modules, strikes or failures differ (time is ignored).
+bool scoreChanged(BombEngineState a, BombEngineState b) {
+  if (a.strikes != b.strikes ||
+      a.solvedModules.length != b.solvedModules.length ||
+      !a.solvedModules.containsAll(b.solvedModules) ||
+      a.failureCounts.length != b.failureCounts.length) {
+    return true;
+  }
+  return a.failureCounts.entries.any(
+    (entry) => b.failureCounts[entry.key] != entry.value,
+  );
+}
+
 /// Payload of a `snapshot` message, the inverse of [reduceSnapshot].
 Map<String, dynamic> encodeSnapshot(GameState state, BombEngineState next) => {
   'timeLeftMs': next.timeLeft.inMilliseconds,
@@ -105,6 +118,10 @@ GameState reducePeerCommand(
   }
   if (type != 'command') return state;
   final command = payload['command'];
+  if (command == 'presence') {
+    final away = payload['away'];
+    return away is bool ? state.copyWith(partnerAway: away) : state;
+  }
   if (command == 'player_name') {
     final name = payload['name'];
     return name is String && name.isNotEmpty

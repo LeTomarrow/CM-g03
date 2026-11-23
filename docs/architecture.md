@@ -633,8 +633,7 @@ Ainda por implementar:
 
 - comandos de jogo versionados para cada módulo;
 - confirmação e deduplicação de comandos;
-- sincronização dos resultados no manual;
-- testes de integração entre dois peers reais.
+- testes de integração entre dois peers reais (WebRTC).
 
 A reconexão automática continua deliberadamente fora do protocolo atual. Como
 o mailbox de signaling é removido depois do handshake final, uma reconexão
@@ -646,8 +645,13 @@ segura exige uma versão própria do protocolo de sessão.
 
 1. ~~Criar `GameTransport` como abstração sobre o DataChannel.~~ Feito.
 2. Expandir o comando `module_focus` para comandos de input específicos de cada módulo.
-3. Validar revisões e ignorar snapshots antigos.
-4. Testar o mesmo cenário em dois controllers independentes.
+3. ~~Validar revisões e ignorar snapshots antigos.~~ Feito: o manual ignora
+   snapshots com revisão menor ou igual à última aplicada. O timer é publicado
+   uma vez por segundo, mas módulos resolvidos, falhas e strikes são
+   publicados de imediato.
+4. ~~Testar o mesmo cenário em dois controllers independentes.~~ Feito em
+   `test/game_two_peers_test.dart`, com um DataChannel em memória que codifica
+   e valida cada mensagem.
 
 ### Fase 2 — migrar a lobby
 
@@ -664,8 +668,18 @@ lobby tem poucas ações, todas locais, e não precisa de reducer.
 ### Fase 4 — robustez
 
 1. Adicionar estados de erro e reconexão.
-2. Definir comportamento quando o app vai para background.
-3. Adicionar timeout de snapshots e desconexão visível.
+2. ~~Definir comportamento quando o app vai para background.~~ Feito: ao
+   esconder a app, o jogador envia `command: presence` (`away: true`) e o
+   parceiro vê um aviso. O timer da bomba não para, porque o relógio do
+   operador é a autoridade. Se a ausência durar mais do que o limite de
+   silêncio, a partida termina como `connection_lost`.
+3. ~~Adicionar timeout de snapshots e desconexão visível.~~ Feito: os dois
+   peers enviam `ping` a cada segundo (`HeartbeatTick`). Sem mensagens do
+   parceiro durante 4 s, `GameState.linkWarning` mostra um aviso nos dois
+   ecrãs; aos 15 s, o controller trata a sessão como `connection_lost`, sem
+   esperar que o DataChannel falhe (o que pode demorar cerca de 30 s). O
+   controller conta ticks em vez de ler o relógio, para ser testável com
+   tempo simulado (`test/game_heartbeat_test.dart`).
 4. Testar TURN em redes que não suportam ligação direta.
 5. Validar lifecycle de isolate, rota e provider em Android, iOS e web.
 
@@ -709,3 +723,26 @@ Teste num telemóvel real: abrir BÚSSOLA, manter o botão premido, rodar o
 telemóvel na horizontal e soltar. Rodar novamente deve manter o ponteiro
 fixo; voltar a premir permite ajustar. A calibração física (movimento em 8,
 afastado de ímanes/metal) é distinta de fixar a resposta.
+
+## Ângulo: sensor e alinhamento
+
+`TiltService` encapsula o `sensors_plus` e calcula a rotação do telemóvel no
+plano do ecrã a partir da gravidade medida pelo acelerómetro
+(`atan2(-x, y)`, sentido horário, 0° = vertical em retrato). Usa-se o
+acelerómetro e não a integração do giroscópio porque dá um ângulo absoluto,
+sem deriva. O vetor é suavizado com um filtro passa-baixo antes de calcular o
+ângulo, para a passagem 0°/360° não causar saltos. Com o telemóvel quase
+deitado (gravidade no plano < 5 m/s²) não há leitura válida. Web e desktop
+apresentam o estado de sensor indisponível.
+
+`tiltProvider` e `GyroController` seguem o mesmo padrão da bússola: o ângulo
+só é captado enquanto **MANTER PARA ALINHAR** está premido e fica fixado ao
+soltar. A tolerância é de 10°.
+
+## Morse: vibração
+
+O módulo Morse usa o package `vibration` para vibrar com a duração real de
+cada símbolo (ponto = 1 unidade, traço = 3 unidades), em sincronia com o LED,
+para que o sinal possa ser lido sem olhar para o ecrã. Se o dispositivo não
+suportar vibração, recorre a `HapticFeedback`. A vibração é cancelada ao
+fechar o módulo.

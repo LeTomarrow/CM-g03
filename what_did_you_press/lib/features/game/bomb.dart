@@ -36,10 +36,19 @@ class _BombPageState extends ConsumerState<BombPage> {
   static const int _maxStrikes = 3;
 
   bool _ended = false;
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(
+      onHide: () => ref
+          .read(gameControllerProvider.notifier)
+          .dispatch(const AppLifecycleChanged(foreground: false)),
+      onShow: () => ref
+          .read(gameControllerProvider.notifier)
+          .dispatch(const AppLifecycleChanged(foreground: true)),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
@@ -55,6 +64,12 @@ class _BombPageState extends ConsumerState<BombPage> {
         ref.read(gameControllerProvider.notifier).dispatch(PlayerNameSet(name));
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
   }
 
   Future<void> _endGame(bool defused, {String reason = 'game_finished'}) async {
@@ -276,6 +291,17 @@ class _BombPageState extends ConsumerState<BombPage> {
                 Text(
                   'O MANUAL ESTÁ A CONSULTAR: ${game.loadout.modules[game.manualFocus!].type.label}',
                   style: const TextStyle(color: AppColors.neonBlue),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (game.linkWarning != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  color: AppColors.amber.withValues(alpha: 0.2),
+                  child: Text(
+                    game.linkWarning!,
+                    style: const TextStyle(color: AppColors.amber),
+                  ),
                 ),
                 const SizedBox(height: 12),
               ],

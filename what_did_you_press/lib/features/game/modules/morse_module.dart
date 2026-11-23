@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:vibration/vibration.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/core/manual_data.dart';
@@ -32,9 +33,10 @@ class _MorseModulePageState extends State<MorseModulePage> {
     for (final letter in _word.split('')) {
       for (final symbol in morseCode[letter]!.split('')) {
         if (!mounted) return;
+        final duration = symbol == '.' ? _unit : _unit * 3;
         setState(() => _ledOn = true);
-        HapticFeedback.heavyImpact();
-        await Future.delayed(symbol == '.' ? _unit : _unit * 3);
+        _buzz(duration);
+        await Future.delayed(duration);
         if (!mounted) return;
         setState(() => _ledOn = false);
         await Future.delayed(_unit);
@@ -43,6 +45,19 @@ class _MorseModulePageState extends State<MorseModulePage> {
     }
 
     if (mounted) setState(() => _playing = false);
+  }
+
+  /// Vibrates for the symbol's real length so dots and dashes can be felt.
+  void _buzz(Duration duration) {
+    Vibration.vibrate(
+      duration: duration.inMilliseconds,
+    ).catchError((Object _) => HapticFeedback.heavyImpact());
+  }
+
+  @override
+  void dispose() {
+    Vibration.cancel().catchError((Object _) {});
+    super.dispose();
   }
 
   void _confirm() {

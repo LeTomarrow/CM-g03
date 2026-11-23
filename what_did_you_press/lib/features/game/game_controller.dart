@@ -19,15 +19,23 @@ final gameControllerProvider =
 /// compute the next [GameState]; this class only runs the effects (engine
 /// commands and transport messages).
 class GameController extends Notifier<GameState> {
+  /// Heartbeats without any message before the partner is shown as silent.
+  static const silenceWarningTicks = 4;
+
+  /// Heartbeats without any message before the session counts as lost.
+  static const silenceLimitTicks = 15;
+
   BombEngine? _engine;
   StreamSubscription<BombEngineState>? _engineSubscription;
   GameTransport? _transport;
   StreamSubscription<GameMessage>? _remoteSubscription;
   int _revision = 0;
-  int? _lastPublishedSecond;
+  BombEngineState? _lastPublished;
   int _lastRemoteRevision = -1;
   Timer? _drawingTimer;
   List<Stroke>? _pendingDrawing;
+  Timer? _heartbeat;
+  int _silentTicks = 0;
 
   @override
   GameState build() {
@@ -35,6 +43,7 @@ class GameController extends Notifier<GameState> {
       _engineSubscription?.cancel();
       _remoteSubscription?.cancel();
       _drawingTimer?.cancel();
+      _heartbeat?.cancel();
       _engine?.dispose();
     });
     return GameState.initial();
@@ -52,6 +61,12 @@ class GameController extends Notifier<GameState> {
     _remoteSubscription = transport?.gameMessages.listen(
       (message) => dispatch(RemoteMessageReceived(message)),
     );
+    if (transport != null) {
+      _heartbeat = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => dispatch(const HeartbeatTick()),
+      );
+    }
     if (!authority) {
       state = state.copyWith(started: true);
       return;
@@ -99,6 +114,8 @@ class GameController extends Notifier<GameState> {
         if (value.isEmpty) return;
         state = state.copyWith(playerName: value);
         _send('command', {'command': 'player_name', 'name': value});
+      case AppLifecycleChanged(:final foreground):
+        _send('command', {'command': 'presence', 'away': !foreground});
       case HackLaunched(:final hack):
         _send('hack', {'hack': hack});
       case HackCountered():
@@ -123,26 +140,58 @@ class GameController extends Notifier<GameState> {
         );
       case EngineStateReceived(state: final next):
         _onEngineState(next);
+      case HeartbeatTick():
+        _onHeartbeat();
       case RemoteMessageReceived(:final message):
+        _silentTicks = 0;
+        if (state.partnerSilent) state = state.copyWith(partnerSilent: false);
         _onRemote(message);
+    }
+  }
+
+  /// Both peers ping every second, so silence means the link (or the
+  /// partner's app) stopped; the DataChannel itself can take ~30 s to fail.
+  void _onHeartbeat() {
+    if (state.connectionNotice != null) {
+      _heartbeat?.cancel();
+      return;
+    }
+    _send('ping', const {});
+    _silentTicks++;
+    if (_silentTicks >= silenceLimitTicks) {
+      _heartbeat?.cancel();
+      _onRemote(
+        const GameMessage(
+          session: '',
+          type: 'ended',
+          revision: 0,
+          payload: {'reason': 'connection_lost'},
+        ),
+      );
+    } else if (_silentTicks >= silenceWarningTicks && !state.partnerSilent) {
+      state = state.copyWith(partnerSilent: true);
     }
   }
 
   void _onEngineState(BombEngineState next) {
     state = reduceEngineState(state, next);
-    final second = next.timeLeft.inSeconds;
-    if (_transport == null ||
-        state.connectionNotice != null ||
-        (_lastPublishedSecond == second &&
-            next.status == BombEngineStatus.running)) {
+    if (_transport == null || state.connectionNotice != null) return;
+    final last = _lastPublished;
+    // The timer is published once per second; score changes immediately.
+    if (last != null &&
+        next.status == BombEngineStatus.running &&
+        last.timeLeft.inSeconds == next.timeLeft.inSeconds &&
+        !scoreChanged(last, next)) {
       return;
     }
-    _lastPublishedSecond = second;
+    _lastPublished = next;
     _send('snapshot', encodeSnapshot(state, next));
   }
 
   void _onRemote(GameMessage message) {
     switch (message.type) {
+      case 'ping':
+        return;
       case 'drawing':
         final strokes = applyDrawingPayload(liveDrawing.value, message.payload);
         if (strokes != null) liveDrawing.value = strokes;

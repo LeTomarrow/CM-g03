@@ -31,6 +31,56 @@ void main() {
     });
   });
 
+  group('scoreChanged', () {
+    BombEngineState engine({
+      Duration timeLeft = const Duration(seconds: 90),
+      int strikes = 0,
+      Set<int> solved = const {},
+      Map<int, int> failures = const {},
+    }) => BombEngineState(
+      timeLeft: timeLeft,
+      strikes: strikes,
+      solvedModules: solved,
+      failureCounts: failures,
+      status: BombEngineStatus.running,
+    );
+
+    test('ignores the timer but detects every score change', () {
+      final base = engine(solved: {0}, failures: {1: 1}, strikes: 1);
+      expect(
+        scoreChanged(
+          base,
+          engine(
+            timeLeft: const Duration(seconds: 10),
+            solved: {0},
+            failures: {1: 1},
+            strikes: 1,
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        scoreChanged(
+          base,
+          engine(solved: {0, 2}, failures: {1: 1}, strikes: 1),
+        ),
+        isTrue,
+      );
+      expect(
+        scoreChanged(base, engine(solved: {2}, failures: {1: 1}, strikes: 1)),
+        isTrue,
+      );
+      expect(
+        scoreChanged(base, engine(solved: {0}, failures: {1: 2}, strikes: 2)),
+        isTrue,
+      );
+      expect(
+        scoreChanged(base, engine(solved: {0}, failures: {2: 1}, strikes: 1)),
+        isTrue,
+      );
+    });
+  });
+
   group('reduceSnapshot', () {
     test('round-trips the operator snapshot on the manual', () {
       final operator = _started();

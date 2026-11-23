@@ -30,6 +30,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
   HackType? _activeHack;
   String? _shownConnectionNotice;
   final ScrollController _scrollController = ScrollController();
+  late final AppLifecycleListener _lifecycle;
   final Map<ModuleType, GlobalKey> _sectionKeys = {
     for (final type in ModuleType.values) type: GlobalKey(),
   };
@@ -37,6 +38,14 @@ class _ManualPageState extends ConsumerState<ManualPage> {
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(
+      onHide: () => ref
+          .read(gameControllerProvider.notifier)
+          .dispatch(const AppLifecycleChanged(foreground: false)),
+      onShow: () => ref
+          .read(gameControllerProvider.notifier)
+          .dispatch(const AppLifecycleChanged(foreground: true)),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(
@@ -57,6 +66,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -89,14 +99,13 @@ class _ManualPageState extends ConsumerState<ManualPage> {
 
   Future<void> _openTerminal() async {
     final remote = ref.read(gameControllerProvider).activeHack;
-    final active = _activeHack ??
+    final active =
+        _activeHack ??
         (remote == null
             ? null
             : HackType.values.where((item) => item.name == remote).firstOrNull);
     final countered = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (context) => TerminalPage(activeHack: active),
-      ),
+      MaterialPageRoute(builder: (context) => TerminalPage(activeHack: active)),
     );
     if (!mounted || countered != true) return;
     setState(() => _activeHack = null);
@@ -220,6 +229,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
     final game = ref.watch(gameControllerProvider);
     final controller = ref.read(gameControllerProvider.notifier);
     return _buildSection('BOMBA EM DIRETO', AppColors.danger, [
+      if (game.linkWarning != null)
+        Text(game.linkWarning!, style: const TextStyle(color: AppColors.amber)),
       if (game.connectionNotice != null)
         Text(
           game.connectionNotice!,
@@ -315,7 +326,9 @@ class _ManualPageState extends ConsumerState<ManualPage> {
     ref.listen<GameState>(gameControllerProvider, (_, next) {
       _scrollToDefuserModule(next);
       final notice = next.connectionNotice;
-      if (notice == null || notice == _shownConnectionNotice || !mounted) return;
+      if (notice == null || notice == _shownConnectionNotice || !mounted) {
+        return;
+      }
       _shownConnectionNotice = notice;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -326,7 +339,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
           builder: (context) => AlertDialog(
             backgroundColor: AppColors.card,
             title: Text(
-              notice == 'A bomba foi desarmada.' || notice == 'A bomba explodiu.'
+              notice == 'A bomba foi desarmada.' ||
+                      notice == 'A bomba explodiu.'
                   ? 'FIM DE JOGO'
                   : 'LIGAÇÃO TERMINADA',
             ),
@@ -335,7 +349,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: Text(
-                  notice == 'A bomba foi desarmada.' || notice == 'A bomba explodiu.'
+                  notice == 'A bomba foi desarmada.' ||
+                          notice == 'A bomba explodiu.'
                       ? 'VOLTAR AO MENU'
                       : 'VOLTAR AO MENU',
                 ),
@@ -393,7 +408,9 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                     ModuleType.gyro.label,
                     ModuleType.gyro.color,
                     [
-                      _buildText('Aponta o telemóvel para o ângulo indicado.'),
+                      _buildText(
+                        'Com o telemóvel na vertical, roda-o até ao ângulo indicado.',
+                      ),
                       for (final entry in angleTable.entries)
                         _buildRow(entry.key, '${entry.value}°'),
                     ],

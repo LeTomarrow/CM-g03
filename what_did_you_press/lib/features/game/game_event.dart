@@ -74,11 +74,22 @@ final class PlayerNameSet extends GameEvent {
   final String name;
 }
 
+/// This device's app went to (or came back from) the background.
+final class AppLifecycleChanged extends GameEvent {
+  const AppLifecycleChanged({required this.foreground});
+  final bool foreground;
+}
+
 // ── System events (not sent by views) ───────────────────────────────────────
 
 final class EngineStateReceived extends GameEvent {
   const EngineStateReceived(this.state);
   final BombEngineState state;
+}
+
+/// Internal 1 s heartbeat: sends a ping and measures the partner's silence.
+final class HeartbeatTick extends GameEvent {
+  const HeartbeatTick();
 }
 
 final class RemoteMessageReceived extends GameEvent {
