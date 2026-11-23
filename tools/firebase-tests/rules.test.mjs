@@ -88,3 +88,54 @@ test('expired rooms reject membership and signaling but host may clean up', asyn
   await assertFails(updateDoc(ref('host'), {offer: {type: 'offer', sdp: 'sdp'}}));
   await assertSucceeds(deleteDoc(ref('host')));
 });
+
+const session = 'a'.repeat(32);
+const reconnectRef = (uid, id = session) => doc(db(uid), 'reconnects', id);
+const attempt = (n, extra = {}) => ({hostUid: 'host', guestUid: 'guest',
+  attempt: n, expiresAt: Timestamp.fromMillis(Date.now() + 5 * 60000),
+  offer: {type: 'offer', sdp: `sdp-${n}`}, answer: null,
+  hostCandidates: [], guestCandidates: [], ...extra});
+
+test('reconnect attempts: host offers, guest answers, strangers stay out', async () => {
+  // Watching before the first attempt must be allowed for players.
+  await assertSucceeds(getDoc(reconnectRef('guest')));
+  await assertFails(getDoc(reconnectRef(null)));
+  await assertFails(getDoc(reconnectRef('guest', 'not-a-session')));
+  await assertFails(setDoc(reconnectRef('guest'), {...attempt(1), hostUid: 'guest',
+    guestUid: 'guest'}));
+  await assertFails(setDoc(reconnectRef('host'), attempt(1, {answer:
+    {type: 'answer', sdp: 'sdp'}})));
+  await assertFails(setDoc(reconnectRef('host'), attempt(1, {expiresAt:
+    Timestamp.fromMillis(Date.now() + 3600000)})));
+  await assertSucceeds(setDoc(reconnectRef('host'), attempt(1)));
+
+  await assertFails(getDoc(reconnectRef('stranger')));
+  await assertFails(getDocs(collection(db('guest'), 'reconnects')));
+  await assertFails(updateDoc(reconnectRef('stranger'),
+    {answer: {type: 'answer', sdp: 'sdp'}}));
+  await assertFails(updateDoc(reconnectRef('host'),
+    {answer: {type: 'answer', sdp: 'sdp'}}));
+  await assertFails(updateDoc(reconnectRef('guest'),
+    {offer: {type: 'offer', sdp: 'spoof'}}));
+  await assertSucceeds(updateDoc(reconnectRef('guest'),
+    {answer: {type: 'answer', sdp: 'sdp'}}));
+  await assertFails(updateDoc(reconnectRef('guest'),
+    {answer: {type: 'answer', sdp: 'changed'}}));
+  await assertSucceeds(updateDoc(reconnectRef('host'),
+    {hostCandidates: arrayUnion(candidate)}));
+  await assertSucceeds(updateDoc(reconnectRef('guest'),
+    {guestCandidates: arrayUnion(candidate)}));
+  await assertFails(updateDoc(reconnectRef('guest'),
+    {hostCandidates: arrayUnion({...candidate, candidate: 'spoof'})}));
+});
+
+test('a new attempt counts up by one and keeps the same guest', async () => {
+  await setDoc(reconnectRef('host'), attempt(1));
+  await assertFails(setDoc(reconnectRef('host'), attempt(3)));
+  await assertFails(setDoc(reconnectRef('host'), attempt(2, {guestUid: 'other'})));
+  await assertFails(setDoc(reconnectRef('guest'), {...attempt(2), hostUid: 'guest'}));
+  await assertSucceeds(setDoc(reconnectRef('host'), attempt(2)));
+  assert.equal((await getDoc(reconnectRef('guest'))).data().attempt, 2);
+  await assertFails(deleteDoc(reconnectRef('stranger')));
+  await assertSucceeds(deleteDoc(reconnectRef('guest')));
+});

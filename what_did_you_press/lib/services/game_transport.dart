@@ -5,6 +5,10 @@ import 'package:what_did_you_press/services/game_protocol.dart';
 abstract interface class GameTransport {
   Stream<GameMessage> get gameMessages;
 
+  /// `false` when the connection drops and is being re-established, `true`
+  /// when it recovers. A failed recovery arrives as an `ended` message.
+  Stream<bool> get linkStatus;
+
   /// Throws if the peer is no longer connected.
   Future<void> sendGameMessage({
     required String type,

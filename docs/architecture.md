@@ -635,9 +635,36 @@ Ainda por implementar:
 - confirmação e deduplicação de comandos;
 - testes de integração entre dois peers reais (WebRTC).
 
-A reconexão automática continua deliberadamente fora do protocolo atual. Como
-o mailbox de signaling é removido depois do handshake final, uma reconexão
-segura exige uma versão própria do protocolo de sessão.
+### Reconexão durante o jogo
+
+O mailbox `rooms/{code}` é apagado no início do jogo, por isso a reconexão usa
+um documento próprio, `reconnects/{session}`, cujo id é o segredo de sessão
+que os dois jogadores já partilham.
+
+- Quando o `RTCPeerConnection` passa a `disconnected` ou `failed` durante o
+  jogo, o `RoomService` não termina a sessão: abre uma janela de 30 s e emite
+  `linkStatus = false`.
+- O anfitrião (que fez a offer original) chama `restartIce()` e escreve uma
+  tentativa nova (`attempt + 1`, offer, answer e candidatos vazios). Repete a
+  cada 8 s enquanto a ligação estiver em baixo.
+- O convidado observa o documento durante todo o jogo e responde a cada
+  tentativa nova, mesmo que do seu lado não tenha notado a quebra.
+- O ICE reinicia no mesmo `RTCPeerConnection`, por isso o DataChannel (SCTP)
+  sobrevive: as mensagens enviadas durante a quebra são entregues quando a
+  ligação volta, e o estado do jogo continua sem ressincronização.
+- Ao voltar a `connected`, emite `linkStatus = true`. Se a janela fechar sem
+  recuperar, injeta `ended` com `connection_lost`, como antes.
+
+No `GameController`, `linkStatus = false` mostra "A tentar voltar a ligar…" e
+suspende o heartbeat: enquanto o transporte recupera a ligação, é a janela dele
+que decide, não o limite de silêncio.
+
+Limites: só recupera quebras de rede com as duas apps vivas. Se o processo
+de um dos jogadores morrer, o motor da bomba (isolate do operador) e o
+`RTCPeerConnection` perdem-se, e isso exigiria persistir o estado do jogo.
+Qualquer jogador que conheça o segredo de sessão enquanto a sala está aberta
+pode criar `reconnects/{session}` primeiro e bloquear a reconexão (não a
+sessão); como o segredo só é visível a quem tem o código da sala, aceita-se.
 
 ## 14. Próximos passos recomendados
 
@@ -667,7 +694,7 @@ lobby tem poucas ações, todas locais, e não precisa de reducer.
 
 ### Fase 4 — robustez
 
-1. Adicionar estados de erro e reconexão.
+1. ~~Adicionar estados de erro e reconexão.~~ Feito: ver *Reconexão durante o jogo*.
 2. ~~Definir comportamento quando o app vai para background.~~ Feito: ao
    esconder a app, o jogador envia `command: presence` (`away: true`) e o
    parceiro vê um aviso. O timer da bomba não para, porque o relógio do

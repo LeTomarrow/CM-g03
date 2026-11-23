@@ -42,6 +42,19 @@ class RoomService implements GameTransport {
   Timer? _startTimer;
   Completer<void>? _startAck;
 
+  // ICE restart during a game (see [_onLinkDown]).
+  static const _reconnectWindow = Duration(seconds: 30);
+  static const _attemptTimeout = Duration(seconds: 8);
+  final _linkStatus = StreamController<bool>.broadcast();
+  ReconnectMailbox? _reconnect;
+  StreamSubscription<Map<String, dynamic>?>? _reconnectSubscription;
+  Future<void> _reconnectQueue = Future.value();
+  int _attempt = 0;
+  bool _attemptRemoteSet = false;
+  bool _linkDown = false;
+  Timer? _reconnectDeadline;
+  Timer? _attemptTimer;
+
   /// Keeps the host's role fixed, e.g. the operator of an open-world bomb.
   /// Guest swap requests are answered with the unchanged state.
   bool rolesLocked = false;
@@ -115,6 +128,10 @@ class RoomService implements GameTransport {
     try {
       final link = _link = await PeerLink.connect(
         onLocalCandidate: (candidate) {
+          if (_attempt > 0) {
+            _sendReconnectCandidate(candidate);
+            return;
+          }
           if (_signalingClosed) return;
           unawaited(
             mailbox.addCandidate(candidate, fromHost: _isHost).catchError((
@@ -130,9 +147,15 @@ class RoomService implements GameTransport {
           if (_disposed || _protocol?.phase == 'closed') return;
           _fail(roomError('O outro jogador desligou-se.'));
         },
-        onFailed: () => _fail(
-          roomError('A ligação entre jogadores falhou. Cria uma nova sala.'),
-        ),
+        onFailed: () {
+          // In a game the reconnect window decides; elsewhere it is final.
+          if (_protocol?.phase == 'playing') return;
+          _fail(
+            roomError('A ligação entre jogadores falhou. Cria uma nova sala.'),
+          );
+        },
+        onDisconnected: _onLinkDown,
+        onReconnected: _onLinkUp,
       );
       if (_isHost) {
         await link.openChannel();
@@ -265,7 +288,10 @@ class RoomService implements GameTransport {
           }
         });
       }
-      if (protocol.phase == 'playing') _startTimer?.cancel();
+      if (protocol.phase == 'playing') {
+        _startTimer?.cancel();
+        _watchReconnects();
+      }
       _emit();
     }
   }
@@ -302,6 +328,7 @@ class RoomService implements GameTransport {
       await _deleteMailbox();
       _send('start');
       _protocol!.phase = 'playing';
+      _watchReconnects();
       _emit();
     } catch (_) {
       _protocol!.abortStart();
@@ -345,6 +372,130 @@ class RoomService implements GameTransport {
   /// Gameplay transport over the reliable DataChannel retained after start.
   @override
   Stream<GameMessage> get gameMessages => _gameEvents.stream;
+
+  @override
+  Stream<bool> get linkStatus => _linkStatus.stream;
+
+  // ── Reconnection ──────────────────────────────────────────────────────────
+  //
+  // The DataChannel survives an ICE restart, so a network change (Wi-Fi ↔
+  // mobile data, a short outage, the app resuming from background) is healed
+  // on the same connection and the game messages queued meanwhile still
+  // arrive. The host, as the original offerer, publishes each new offer in
+  // `reconnects/{session}`; the guest watches it for the whole game.
+
+  void _watchReconnects() {
+    if (_reconnect != null || _disposed) return;
+    final mailbox = _reconnect = _signaling.reconnect(_protocol!.session);
+    _reconnectSubscription = mailbox.watch().listen(
+      (data) {
+        _reconnectQueue = _reconnectQueue
+            .then((_) => _readReconnect(data))
+            .catchError((Object _) {
+              // A broken attempt is retried until the window closes.
+            });
+      },
+      onError: (Object _) {
+        // Offline listeners resume by themselves; the window decides.
+      },
+    );
+  }
+
+  void _onLinkDown() {
+    if (_disposed || _linkDown || _protocol?.phase != 'playing') return;
+    _linkDown = true;
+    _linkStatus.add(false);
+    _reconnectDeadline = Timer(_reconnectWindow, () {
+      if (_linkDown) _fail(roomError('Não foi possível voltar a ligar.'));
+    });
+    if (_isHost) _restartIce();
+  }
+
+  void _onLinkUp() {
+    if (_disposed || !_linkDown) return;
+    _linkDown = false;
+    _reconnectDeadline?.cancel();
+    _attemptTimer?.cancel();
+    _linkStatus.add(true);
+  }
+
+  /// Host only: one attempt, retried while the link stays down.
+  void _restartIce() {
+    _reconnectQueue = _reconnectQueue
+        .then((_) async {
+          if (_disposed || !_linkDown) return;
+          final mailbox = _reconnect;
+          final guest = _guestUid;
+          if (mailbox == null || guest == null) return;
+          _attempt++;
+          _attemptRemoteSet = false;
+          final offer = await _link!.createRestartOffer();
+          // Not awaited: offline, Firestore queues the write until it can send.
+          unawaited(
+            mailbox
+                .writeAttempt(
+                  attempt: _attempt,
+                  hostUid: _hostUid!,
+                  guestUid: guest,
+                  offer: offer,
+                )
+                .catchError((Object _) {}),
+          );
+          _attemptTimer?.cancel();
+          _attemptTimer = Timer(_attemptTimeout, () {
+            if (_linkDown) _restartIce();
+          });
+        })
+        .catchError((Object _) {});
+  }
+
+  Future<void> _readReconnect(Map<String, dynamic>? data) async {
+    if (_disposed || data == null) return;
+    final link = _link!;
+    final attempt = data['attempt'];
+    if (attempt is! int) return;
+    if (_isHost) {
+      if (attempt != _attempt) return;
+      final answer = data['answer'];
+      if (!_attemptRemoteSet && answer is Map) {
+        await link.setRemoteDescription(answer);
+        _attemptRemoteSet = true;
+      }
+      if (_attemptRemoteSet) {
+        await link.addRemoteCandidates(
+          data['guestCandidates'] as List,
+          tolerant: true,
+        );
+      }
+      return;
+    }
+    // Guest: answer every new attempt, even if this side never saw the drop.
+    final offer = data['offer'];
+    if (attempt > _attempt && offer is Map) {
+      _attempt = attempt;
+      _attemptRemoteSet = false;
+      await link.setRemoteDescription(offer);
+      _attemptRemoteSet = true;
+      final answer = await link.createAnswer();
+      unawaited(_reconnect!.writeAnswer(answer).catchError((Object _) {}));
+    }
+    if (attempt == _attempt && _attemptRemoteSet) {
+      await link.addRemoteCandidates(
+        data['hostCandidates'] as List,
+        tolerant: true,
+      );
+    }
+  }
+
+  void _sendReconnectCandidate(Object? candidate) {
+    final mailbox = _reconnect;
+    if (mailbox == null || _disposed) return;
+    unawaited(
+      mailbox
+          .addCandidate(candidate, fromHost: _isHost)
+          .catchError((Object _) {}),
+    );
+  }
 
   @override
   Future<void> sendGameMessage({
@@ -396,6 +547,8 @@ class RoomService implements GameTransport {
     _protocol?.phase = 'closed';
     _connectionTimer?.cancel();
     _startTimer?.cancel();
+    _reconnectDeadline?.cancel();
+    _attemptTimer?.cancel();
     if (_startAck?.isCompleted == false) _startAck!.completeError(error);
     _emit();
     _events.addError(error);
@@ -427,14 +580,22 @@ class RoomService implements GameTransport {
     }
     _connectionTimer?.cancel();
     _startTimer?.cancel();
+    _reconnectDeadline?.cancel();
+    _attemptTimer?.cancel();
     await _stopSignaling();
+    await _reconnectSubscription?.cancel();
     try {
       if (_isHost && _mailbox != null) await _deleteMailbox();
     } catch (_) {
       // Offline cleanup may fail; the code expires and can be removed later.
     }
+    if (_reconnect != null) {
+      // Either player may clean up; the document may already be gone.
+      unawaited(_reconnect!.delete().catchError((Object _) {}));
+    }
     await _link?.close();
     await _events.close();
     await _gameEvents.close();
+    await _linkStatus.close();
   }
 }

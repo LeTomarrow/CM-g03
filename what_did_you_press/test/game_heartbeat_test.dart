@@ -13,6 +13,11 @@ class _Room implements GameTransport {
   final messages = StreamController<GameMessage>.broadcast();
   final sent = <GameMessage>[];
 
+  final link = StreamController<bool>.broadcast();
+
+  @override
+  Stream<bool> get linkStatus => link.stream;
+
   @override
   Stream<GameMessage> get gameMessages => messages.stream;
 
@@ -65,6 +70,7 @@ void main() {
   Future<void> stop(WidgetTester tester) async {
     container.dispose();
     await room.messages.close();
+    await room.link.close();
     await tester.pump();
   }
 
@@ -134,6 +140,45 @@ void main() {
     room.receive('command', {'command': 'presence', 'away': false});
     await tester.pump();
     expect(state().partnerAway, isFalse);
+    await stop(tester);
+  });
+
+  testWidgets('while reconnecting the transport window decides, not silence', (
+    tester,
+  ) async {
+    await startManual(tester);
+    room.link.add(false);
+    await tester.pump();
+    expect(state().reconnecting, isTrue);
+    expect(state().linkWarning, contains('voltar a ligar'));
+
+    final pings = room.pings;
+    await wait(tester, GameController.silenceLimitTicks + 5);
+    expect(state().status, BombEngineStatus.running);
+    expect(state().connectionNotice, isNull);
+    expect(room.pings, pings);
+
+    room.link.add(true);
+    await tester.pump();
+    expect(state().reconnecting, isFalse);
+    expect(state().linkWarning, isNull);
+    await wait(tester, 2);
+    expect(room.pings, pings + 2);
+    await stop(tester);
+  });
+
+  testWidgets('a failed reconnection still ends the session', (tester) async {
+    await startManual(tester);
+    room.link.add(false);
+    await tester.pump();
+    room.receive('ended', {'reason': 'connection_lost'});
+    await tester.pump();
+    expect(state().status, BombEngineStatus.abandoned);
+    expect(state().linkWarning, isNull);
+    room.link.add(true);
+    await tester.pump();
+    expect(state().linkWarning, isNull);
+    expect(state().status, BombEngineStatus.abandoned);
     await stop(tester);
   });
 }

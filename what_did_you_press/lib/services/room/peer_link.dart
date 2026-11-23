@@ -33,6 +33,8 @@ class PeerLink {
     required void Function() onOpen,
     required void Function() onClosed,
     required void Function() onFailed,
+    void Function()? onDisconnected,
+    void Function()? onReconnected,
   }) async {
     final peer = await createPeerConnection({
       'iceServers': [
@@ -51,9 +53,18 @@ class PeerLink {
       onLocalCandidate(candidate.toMap());
     };
     peer.onDataChannel = link._attach;
+    // ICE can drop and recover while the DataChannel (SCTP) stays open, so
+    // the room service may restart ICE instead of tearing the session down.
     peer.onConnectionState = (state) {
-      if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-        onFailed();
+      switch (state) {
+        case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
+          onReconnected?.call();
+        case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
+          onDisconnected?.call();
+        case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+          onDisconnected?.call();
+          onFailed();
+        default:
       }
     };
     return link;
@@ -77,6 +88,12 @@ class PeerLink {
     return offer.toMap();
   }
 
+  /// Offerer side: new ICE credentials on the same connection and channel.
+  Future<Object?> createRestartOffer() async {
+    await _peer.restartIce();
+    return createOffer();
+  }
+
   Future<Object?> createAnswer() async {
     final answer = await _peer.createAnswer();
     await _peer.setLocalDescription(answer);
@@ -92,16 +109,31 @@ class PeerLink {
       );
 
   /// Adds each candidate once; signaling resends the whole list every time.
-  Future<void> addRemoteCandidates(List<dynamic> candidates) async {
+  ///
+  /// With [tolerant], a rejected candidate is skipped: after an ICE restart a
+  /// late candidate may still carry the previous credentials.
+  Future<void> addRemoteCandidates(
+    List<dynamic> candidates, {
+    bool tolerant = false,
+  }) async {
     for (final candidate in candidates) {
       if (!_remoteCandidates.add(jsonEncode(candidate))) continue;
-      await _peer.addCandidate(
+      final future = _peer.addCandidate(
         RTCIceCandidate(
           candidate['candidate'] as String?,
           candidate['sdpMid'] as String?,
           candidate['sdpMLineIndex'] as int?,
         ),
       );
+      if (!tolerant) {
+        await future;
+        continue;
+      }
+      try {
+        await future;
+      } catch (_) {
+        // Stale candidate from an older ICE generation.
+      }
     }
   }
 

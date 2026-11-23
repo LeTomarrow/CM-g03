@@ -17,6 +17,7 @@ class GameState {
     this.started = false,
     this.partnerSilent = false,
     this.partnerAway = false,
+    this.reconnecting = false,
   });
 
   factory GameState.initial() => GameState(
@@ -44,9 +45,15 @@ class GameState {
   /// The partner reported that their app went to the background.
   final bool partnerAway;
 
+  /// The transport is re-establishing a dropped connection.
+  final bool reconnecting;
+
   /// Visible warning while the session is still running, if any.
   String? get linkWarning {
     if (connectionNotice != null) return null;
+    if (reconnecting) {
+      return 'Ligação perdida. A tentar voltar a ligar…';
+    }
     if (partnerAway) {
       return 'O parceiro saiu da app. A bomba continua a contar.';
     }
@@ -72,6 +79,7 @@ class GameState {
     bool clearHack = false,
     bool? partnerSilent,
     bool? partnerAway,
+    bool? reconnecting,
   }) => GameState(
     timeLeft: timeLeft ?? this.timeLeft,
     strikes: strikes ?? this.strikes,
@@ -86,5 +94,6 @@ class GameState {
     activeHack: clearHack ? null : activeHack ?? this.activeHack,
     partnerSilent: partnerSilent ?? this.partnerSilent,
     partnerAway: partnerAway ?? this.partnerAway,
+    reconnecting: reconnecting ?? this.reconnecting,
   );
 }

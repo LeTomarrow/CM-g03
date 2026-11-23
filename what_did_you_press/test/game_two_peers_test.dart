@@ -17,6 +17,9 @@ class _Link implements GameTransport {
   bool connected = true;
 
   @override
+  Stream<bool> get linkStatus => const Stream.empty();
+
+  @override
   Stream<GameMessage> get gameMessages => _incoming.stream;
 
   @override

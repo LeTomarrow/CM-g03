@@ -29,6 +29,7 @@ class GameController extends Notifier<GameState> {
   StreamSubscription<BombEngineState>? _engineSubscription;
   GameTransport? _transport;
   StreamSubscription<GameMessage>? _remoteSubscription;
+  StreamSubscription<bool>? _linkSubscription;
   int _revision = 0;
   BombEngineState? _lastPublished;
   int _lastRemoteRevision = -1;
@@ -42,6 +43,7 @@ class GameController extends Notifier<GameState> {
     ref.onDispose(() {
       _engineSubscription?.cancel();
       _remoteSubscription?.cancel();
+      _linkSubscription?.cancel();
       _drawingTimer?.cancel();
       _heartbeat?.cancel();
       _engine?.dispose();
@@ -60,6 +62,9 @@ class GameController extends Notifier<GameState> {
     _transport = transport;
     _remoteSubscription = transport?.gameMessages.listen(
       (message) => dispatch(RemoteMessageReceived(message)),
+    );
+    _linkSubscription = transport?.linkStatus.listen(
+      (up) => dispatch(LinkStatusChanged(up: up)),
     );
     if (transport != null) {
       _heartbeat = Timer.periodic(
@@ -142,6 +147,11 @@ class GameController extends Notifier<GameState> {
         _onEngineState(next);
       case HeartbeatTick():
         _onHeartbeat();
+      case LinkStatusChanged(:final up):
+        if (state.connectionNotice != null) return;
+        // While the transport heals the link, its own window decides.
+        _silentTicks = 0;
+        state = state.copyWith(reconnecting: !up, partnerSilent: false);
       case RemoteMessageReceived(:final message):
         _silentTicks = 0;
         if (state.partnerSilent) state = state.copyWith(partnerSilent: false);
@@ -156,6 +166,7 @@ class GameController extends Notifier<GameState> {
       _heartbeat?.cancel();
       return;
     }
+    if (state.reconnecting) return;
     _send('ping', const {});
     _silentTicks++;
     if (_silentTicks >= silenceLimitTicks) {

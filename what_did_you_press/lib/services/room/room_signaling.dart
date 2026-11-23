@@ -39,6 +39,10 @@ class RoomSignaling {
     return created ? RoomMailbox._(_firestore, ref) : null;
   }
 
+  /// Re-signaling channel for ICE restarts of [session] during a game.
+  ReconnectMailbox reconnect(String session) =>
+      ReconnectMailbox(_firestore, session);
+
   /// Claims the guest slot of [code] for [uid].
   Future<
     ({RoomMailbox mailbox, String session, String hostUid, DateTime expiresAt})
@@ -107,4 +111,51 @@ class RoomMailbox {
       if (snapshot.data()?['session'] == session) tx.delete(_ref);
     });
   }
+}
+
+/// Firestore `reconnects/{session}`: re-signals an ICE restart during a game,
+/// after the room mailbox was deleted. The session id is the shared secret
+/// that names it; firestore.rules restricts it to the two players.
+///
+/// Each attempt is a whole new document state written by the host (offer,
+/// empty answer and candidate lists, `attempt` + 1); the guest only answers
+/// and both only append their own candidates.
+class ReconnectMailbox {
+  ReconnectMailbox(FirebaseFirestore firestore, String session)
+    : _ref = firestore.collection('reconnects').doc(session);
+
+  final DocumentReference<Map<String, dynamic>> _ref;
+
+  Future<void> writeAttempt({
+    required int attempt,
+    required String hostUid,
+    required String guestUid,
+    required Object? offer,
+  }) => _ref.set({
+    'hostUid': hostUid,
+    'guestUid': guestUid,
+    'attempt': attempt,
+    'expiresAt': Timestamp.fromDate(
+      DateTime.now().add(const Duration(minutes: 5)),
+    ),
+    'offer': offer,
+    'answer': null,
+    'hostCandidates': <dynamic>[],
+    'guestCandidates': <dynamic>[],
+  });
+
+  Future<void> writeAnswer(Object? answer) => _ref.update({'answer': answer});
+
+  Future<void> addCandidate(Object? candidate, {required bool fromHost}) =>
+      _ref.update({
+        fromHost ? 'hostCandidates' : 'guestCandidates': FieldValue.arrayUnion([
+          candidate,
+        ]),
+      });
+
+  /// Document data, or null while no attempt exists.
+  Stream<Map<String, dynamic>?> watch() =>
+      _ref.snapshots().map((snapshot) => snapshot.data());
+
+  Future<void> delete() => _ref.delete();
 }

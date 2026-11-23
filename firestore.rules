@@ -1,6 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // WebRTC signaling shapes shared by rooms and reconnects.
+    function description(value, type) {
+      return value is map && value.keys().hasOnly(['type', 'sdp'])
+        && value.type == type && value.sdp is string
+        && value.sdp.size() > 0 && value.sdp.size() <= 65536;
+    }
+    function candidate(value) {
+      return value is map
+        && value.keys().hasOnly(['candidate', 'sdpMid', 'sdpMLineIndex'])
+        && value.candidate is string && value.candidate.size() <= 4096
+        && (value.sdpMid == null || value.sdpMid is string)
+        && (value.sdpMLineIndex == null || value.sdpMLineIndex is int);
+    }
+    function appendCandidate(field) {
+      let before = resource.data[field];
+      let after = request.resource.data[field];
+      return after is list && after.size() <= 128
+        && after.size() == before.size() + 1 && after.hasAll(before)
+        && candidate(after[before.size()]);
+    }
+
     match /rooms/{code} {
       function signedIn() {
         return request.auth != null && code.matches('^[0-9]{6}$');
@@ -8,25 +29,6 @@ service cloud.firestore {
       function open() {
         return resource.data.version == 1
           && resource.data.expiresAt > request.time;
-      }
-      function description(value, type) {
-        return value is map && value.keys().hasOnly(['type', 'sdp'])
-          && value.type == type && value.sdp is string
-          && value.sdp.size() > 0 && value.sdp.size() <= 65536;
-      }
-      function candidate(value) {
-        return value is map
-          && value.keys().hasOnly(['candidate', 'sdpMid', 'sdpMLineIndex'])
-          && value.candidate is string && value.candidate.size() <= 4096
-          && (value.sdpMid == null || value.sdpMid is string)
-          && (value.sdpMLineIndex == null || value.sdpMLineIndex is int);
-      }
-      function appendCandidate(field) {
-        let before = resource.data[field];
-        let after = request.resource.data[field];
-        return after is list && after.size() <= 128
-          && after.size() == before.size() + 1 && after.hasAll(before)
-          && candidate(after[before.size()]);
       }
       // The code is an invitation capability: exact lookup is allowed so a
       // guest can join and a host can check collisions. Collection listing is not.
@@ -77,6 +79,59 @@ service cloud.firestore {
         ))
       );
       allow delete: if signedIn() && resource.data.hostUid == request.auth.uid;
+    }
+
+    // ICE restart during a game, after the room mailbox was deleted. The id
+    // is the 32-hex session secret both players learned while signaling.
+    // Each attempt is a whole fresh document written by the host.
+    match /reconnects/{session} {
+      function players(data) {
+        return request.auth.uid == data.hostUid
+          || request.auth.uid == data.guestUid;
+      }
+      function freshAttempt() {
+        let d = request.resource.data;
+        let keys = ['hostUid', 'guestUid', 'attempt', 'expiresAt', 'offer',
+          'answer', 'hostCandidates', 'guestCandidates'];
+        return d.keys().hasAll(keys) && d.keys().hasOnly(keys)
+          && d.hostUid == request.auth.uid
+          && d.guestUid is string && d.guestUid != d.hostUid
+          && d.attempt is int && d.attempt >= 1 && d.attempt <= 1000
+          && d.expiresAt is timestamp && d.expiresAt > request.time
+          && d.expiresAt <= request.time + duration.value(10, 'm')
+          && description(d.offer, 'offer')
+          && d.answer == null
+          && d.hostCandidates == [] && d.guestCandidates == [];
+      }
+      function changed() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+      allow get: if request.auth != null
+        && session.matches('^[a-f0-9]{32}$')
+        && (resource == null || players(resource.data));
+      allow list: if false;
+      allow create: if request.auth != null
+        && session.matches('^[a-f0-9]{32}$')
+        && freshAttempt();
+      allow update: if request.auth != null && (
+        // A new attempt keeps the same players and counts up by one.
+        (request.auth.uid == resource.data.hostUid && freshAttempt()
+          && request.resource.data.guestUid == resource.data.guestUid
+          && request.resource.data.attempt == resource.data.attempt + 1)
+        || (resource.data.expiresAt > request.time && (
+          (request.auth.uid == resource.data.hostUid
+            && appendCandidate('hostCandidates')
+            && changed().hasOnly(['hostCandidates']))
+          || (request.auth.uid == resource.data.guestUid
+            && resource.data.answer == null
+            && description(request.resource.data.answer, 'answer')
+            && changed().hasOnly(['answer']))
+          || (request.auth.uid == resource.data.guestUid
+            && appendCandidate('guestCandidates')
+            && changed().hasOnly(['guestCandidates']))
+        ))
+      );
+      allow delete: if request.auth != null && players(resource.data);
     }
 
     // Open-world bombs. Durations mirror lib/services/bomb_service.dart.

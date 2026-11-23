@@ -92,6 +92,12 @@ final class HeartbeatTick extends GameEvent {
   const HeartbeatTick();
 }
 
+/// The transport lost (`up: false`) or recovered (`up: true`) the link.
+final class LinkStatusChanged extends GameEvent {
+  const LinkStatusChanged({required this.up});
+  final bool up;
+}
+
 final class RemoteMessageReceived extends GameEvent {
   const RemoteMessageReceived(this.message);
   final GameMessage message;

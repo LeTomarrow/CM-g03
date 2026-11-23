@@ -13,6 +13,9 @@ class _GameRoom implements GameTransport {
   final sentTypes = <String>[];
 
   @override
+  Stream<bool> get linkStatus => const Stream.empty();
+
+  @override
   Stream<GameMessage> get gameMessages => messages.stream;
 
   @override
