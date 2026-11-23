@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
@@ -36,11 +38,17 @@ class DrawingPad extends StatefulWidget {
     required this.onChanged,
     this.onStrokeEnd,
     required this.color,
+    this.inkFade,
   });
 
   final void Function(List<Stroke> strokes) onChanged;
   final void Function(List<Stroke> strokes)? onStrokeEnd;
   final Color color;
+
+  /// When set, every point disappears from this pad this long after it was
+  /// drawn, like a trail behind the finger, even if the finger never lifts.
+  /// The full strokes are still reported; the player draws almost blind.
+  final Duration? inkFade;
 
   @override
   State<DrawingPad> createState() => _DrawingPadState();
@@ -48,7 +56,69 @@ class DrawingPad extends StatefulWidget {
 
 class _DrawingPadState extends State<DrawingPad> {
   final List<Stroke> _strokes = [];
+
+  /// When each point was drawn ([_clock] ms), parallel to [_strokes].
+  final List<List<int>> _times = [];
+  final Stopwatch _clock = Stopwatch()..start();
+  Timer? _fadeTicker;
   int? _pointer;
+
+  @override
+  void dispose() {
+    _fadeTicker?.cancel();
+    super.dispose();
+  }
+
+  void _addPoint(Offset point, {required bool newStroke}) {
+    final now = _clock.elapsedMilliseconds;
+    _update(() {
+      if (newStroke) {
+        _strokes.add([point]);
+        _times.add([now]);
+      } else {
+        _strokes.last.add(point);
+        _times.last.add(now);
+      }
+    });
+    _startFading();
+  }
+
+  /// Repaints while ink is fading; stops once nothing is visible.
+  void _startFading() {
+    if (widget.inkFade == null || _fadeTicker != null) return;
+    _fadeTicker = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      setState(() {});
+      if (_visibleStrokes().isEmpty) {
+        _fadeTicker?.cancel();
+        _fadeTicker = null;
+      }
+    });
+  }
+
+  /// The part of each stroke that is still visible on this pad.
+  List<Stroke> _visibleStrokes() {
+    final fade = widget.inkFade;
+    if (fade == null) return _strokes;
+    final cutoff = _clock.elapsedMilliseconds - fade.inMilliseconds;
+    return [
+      for (var i = 0; i < _strokes.length; i++)
+        if (_times[i].last >= cutoff)
+          _strokes[i].sublist(_times[i].indexWhere((time) => time >= cutoff)),
+    ];
+  }
+
+  void _endStroke() {
+    _pointer = null;
+    widget.onStrokeEnd?.call(List.of(_strokes));
+  }
+
+  void _clear() {
+    _update(() {
+      _strokes.clear();
+      _times.clear();
+    });
+  }
 
   void _update(VoidCallback change) {
     setState(change);
@@ -86,37 +156,33 @@ class _DrawingPadState extends State<DrawingPad> {
                   onPointerDown: (event) {
                     if (_pointer != null) return;
                     _pointer = event.pointer;
-                    _update(
-                      () =>
-                          _strokes.add([_normalise(event.localPosition, size)]),
+                    _addPoint(
+                      _normalise(event.localPosition, size),
+                      newStroke: true,
                     );
                   },
                   onPointerMove: (event) {
                     if (event.pointer != _pointer) return;
-                    _update(
-                      () => _strokes.last.add(
-                        _normalise(event.localPosition, size),
-                      ),
+                    _addPoint(
+                      _normalise(event.localPosition, size),
+                      newStroke: false,
                     );
                   },
                   onPointerUp: (event) {
-                    if (event.pointer == _pointer) {
-                      _pointer = null;
-                      widget.onStrokeEnd?.call(List.of(_strokes));
-                    }
+                    if (event.pointer == _pointer) _endStroke();
                   },
                   onPointerCancel: (event) {
-                    if (event.pointer == _pointer) {
-                      _pointer = null;
-                      widget.onStrokeEnd?.call(List.of(_strokes));
-                    }
+                    if (event.pointer == _pointer) _endStroke();
                   },
                   child: Container(
                     decoration: BoxDecoration(
                       color: AppColors.background,
                       border: Border.all(color: AppColors.metalGrey),
                     ),
-                    child: DrawingView(strokes: _strokes, color: widget.color),
+                    child: DrawingView(
+                      strokes: _visibleStrokes(),
+                      color: widget.color,
+                    ),
                   ),
                 ),
               ),
@@ -127,7 +193,7 @@ class _DrawingPadState extends State<DrawingPad> {
                   icon: const Icon(Icons.delete_outline),
                   color: AppColors.textSecondary,
                   tooltip: 'Limpar',
-                  onPressed: () => _update(_strokes.clear),
+                  onPressed: _clear,
                 ),
               ),
             ],

@@ -773,3 +773,47 @@ cada símbolo (ponto = 1 unidade, traço = 3 unidades), em sincronia com o LED,
 para que o sinal possa ser lido sem olhar para o ecrã. Se o dispositivo não
 suportar vibração, recorre a `HapticFeedback`. A vibração é cancelada ao
 fechar o módulo.
+
+## Módulos: puzzles gerados
+
+O `variant` de cada módulo é uma seed (`0 … 2^30`), não um índice de tabela.
+Cada módulo gera o puzzle a partir dela com as funções de
+`core/manual_data.dart`, que também validam a resposta; o manual mostra só as
+regras. Assim os puzzles não se decoram e o manual não vê a variante.
+
+| Módulo | O operador vê | O manual tem |
+|---|---|---|
+| Ângulo | 4 símbolos | valores por símbolo + bónus por repetidos seguidos e extremos iguais (`solveAngle`) |
+| Bússola | 4 números (1–9) | soma módulo 8 → ponto cardeal, oposto se o último > primeiro (`solveCompass`) |
+| Morse | sinal (LED + vibração) | 8 palavras em pares parecidos (FIO/FIM, BOMBA/BOMBO…) → frequência |
+| Símbolos | 6 símbolos coloridos (`symbolBoard`) | 5 regras por prioridade (`solveSymbols`) |
+| Desenho | símbolo + 4 fios em ordem aleatória (`drawingPuzzle`) | 9 símbolos em 3 famílias quase iguais, cada um com uma regra de fio (`WireRule`) |
+| Interruptores | 5 interruptores coloridos, para cima ou para baixo (`switchPuzzle`) | regras por cor, da esquerda para a direita, com exceção para cores seguidas (`solveSwitches`) |
+
+Ângulo e Bússola jogam-se da mesma forma (sequência, conta, orientar o
+telemóvel), por isso cada bomba tem só um deles, sorteado, mais os outros
+quatro módulos (`BombLoadout.generate`).
+
+No Desenho, cada ponto do traço do operador desaparece 800 ms depois de ser
+desenhado, como um rasto atrás do dedo, mesmo sem o levantar
+(`DrawingPad.inkFade`): só o manual vê o desenho completo. As regras de fio
+podem ser por cor, por posição ou relativas a outra cor, e as duas últimas
+obrigam o operador a descrever a ordem dos fios.
+
+## Hackers
+
+O operador é a autoridade dos ataques, tal como do timer. O `HackScheduler`
+corre no heartbeat do operador: o primeiro ataque surge entre 40 e 70 s, e os
+seguintes entre 50 e 90 s depois de o anterior ser travado. Há no máximo um
+ataque ativo, e só enquanto a bomba está ativa (`GameState.hack`).
+
+| Ataque | Efeito |
+|---|---|
+| Ecrã a piscar | o ecrã do operador fica bloqueado: um véu claro absorve todos os toques até o manual travar o ataque (`HackShield`; pulsa entre 80% e 97% de opacidade, menos de 1 vez/s, sem piscar de apagado para aceso, por causa da fotossensibilidade) |
+| Vibração contínua | o telemóvel do manual vibra sem parar e as regras tremem e ficam desfocadas (`HackShake`); o terminal, na barra de cima, continua acessível |
+| Manual às escuras | o manual fica tapado; o terminal dá a senha cifrada (César) |
+
+O operador envia `hack` com `{hack}`; o manual trava o ataque no terminal e
+responde com `{countered}`, que o operador só aceita se nomear o ataque ativo.
+Os dois veem um aviso enquanto o ataque dura. Os testes usam um
+`hackSchedulerProvider` com atrasos curtos.

@@ -1,3 +1,4 @@
+import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 
@@ -47,6 +48,14 @@ class GameState {
 
   /// The transport is re-establishing a dropped connection.
   final bool reconnecting;
+
+  /// The attack whose effects are showing, only while the bomb is live.
+  HackType? get hack {
+    if (connectionNotice != null || status != BombEngineStatus.running) {
+      return null;
+    }
+    return HackType.values.asNameMap()[activeHack];
+  }
 
   /// Visible warning while the session is still running, if any.
   String? get linkWarning {

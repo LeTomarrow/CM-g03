@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
 import 'package:what_did_you_press/features/game/game_event.dart';
 import 'package:what_did_you_press/features/game/game_state.dart';
+import 'package:what_did_you_press/features/game/hack_scheduler.dart';
 import 'package:what_did_you_press/services/game_protocol.dart';
 import 'package:what_did_you_press/services/game_transport.dart';
 
@@ -57,12 +59,13 @@ class _Link implements GameTransport {
 
 /// A player: its own ProviderContainer, like a separate device.
 class _Peer {
-  _Peer(this.link) {
+  _Peer(this.link, {List overrides = const []})
+    : container = ProviderContainer(overrides: [...overrides]) {
     _subscription = container.listen(gameControllerProvider, (_, _) {});
   }
 
   final _Link link;
-  final container = ProviderContainer();
+  final ProviderContainer container;
   late final ProviderSubscription<GameState> _subscription;
 
   GameController get controller =>
@@ -105,7 +108,19 @@ void main() {
     final b = _Link();
     a.peer = b;
     b.peer = a;
-    operator = _Peer(a);
+    // Hackers strike on the first heartbeat, then never again.
+    operator = _Peer(
+      a,
+      overrides: [
+        hackSchedulerProvider.overrideWithValue(
+          () => HackScheduler(
+            Random(3),
+            firstDelay: (min: 1, max: 1),
+            pause: (min: 10000, max: 10000),
+          ),
+        ),
+      ],
+    );
     manual = _Peer(b);
     await manual.controller.start(
       moduleCount: 3,
@@ -217,5 +232,14 @@ void main() {
       operator.state.connectionNotice,
       'A ligação ao outro jogador foi perdida.',
     );
+  });
+
+  test('the operator launches an attack and the manual counters it', () async {
+    final attacked = await manual.waitFor((s) => s.hack != null);
+    expect(attacked.hack!.name, operator.state.activeHack);
+
+    await manual.controller.dispatch(const HackCountered());
+    expect(manual.state.hack, isNull);
+    await operator.waitFor((s) => s.activeHack == null);
   });
 }

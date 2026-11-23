@@ -14,12 +14,11 @@ class GyroModulePage extends ConsumerWidget {
 
   static const double _tolerance = 10;
 
-  String get _sequence =>
-      angleTable.keys.elementAt(variant % angleTable.length);
+  List<String> get _sequence => angleSequence(variant);
 
   void _confirm(BuildContext context, TiltSample? sample) {
     if (sample == null || !sample.hasAngle) return;
-    final target = angleTable[_sequence]!.toDouble();
+    final target = solveAngle(_sequence).toDouble();
     Navigator.of(
       context,
     ).pop(angleDistance(sample.angle!, target) <= _tolerance);
@@ -56,7 +55,7 @@ class GyroModulePage extends ConsumerWidget {
       onConfirm: () => _confirm(context, sample),
       confirmEnabled: ready,
       children: [
-        SequencePanel(sequence: _sequence, color: AppColors.neonBlue),
+        SequencePanel(sequence: _sequence.join(' '), color: AppColors.neonBlue),
         const SizedBox(height: 32),
         Container(
           padding: const EdgeInsets.all(16),

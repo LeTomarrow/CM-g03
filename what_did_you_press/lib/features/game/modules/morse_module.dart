@@ -19,8 +19,7 @@ class MorseModulePage extends StatefulWidget {
 class _MorseModulePageState extends State<MorseModulePage> {
   static const Duration _unit = Duration(milliseconds: 250);
 
-  String get _word =>
-      morseFrequencies.keys.elementAt(widget.variant % morseFrequencies.length);
+  late final String _word = morseWord(widget.variant);
   bool _playing = false;
   bool _ledOn = false;
   String? _selected;
@@ -71,7 +70,7 @@ class _MorseModulePageState extends State<MorseModulePage> {
     return InkWell(
       onTap: () => setState(() => _selected = frequency),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.card,
           border: Border.all(
@@ -131,10 +130,15 @@ class _MorseModulePageState extends State<MorseModulePage> {
           style: TextStyle(color: AppColors.textSecondary, fontSize: 18),
         ),
         const SizedBox(height: 16),
-        for (final frequency in frequencies) ...[
-          _buildFrequency(frequency),
-          const SizedBox(height: 12),
-        ],
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 2.6,
+          children: [for (final f in frequencies) _buildFrequency(f)],
+        ),
       ],
     );
   }

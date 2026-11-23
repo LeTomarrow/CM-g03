@@ -14,8 +14,7 @@ class SymbolsModulePage extends StatefulWidget {
 }
 
 class _SymbolsModulePageState extends State<SymbolsModulePage> {
-  late final List<SymbolTile> _tiles =
-      symbolVariants[widget.variant % symbolVariants.length];
+  late final List<SymbolTile> _tiles = symbolBoard(widget.variant);
   int? _selected;
 
   void _confirm() {

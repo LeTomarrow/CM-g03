@@ -13,6 +13,9 @@ class DrawingModulePage extends StatefulWidget {
     this.onDrawingCompleted,
   });
 
+  /// How long a finished stroke stays visible to the operator.
+  static const inkFade = Duration(milliseconds: 800);
+
   final int variant;
   final ValueChanged<List<Stroke>>? onDrawingChanged;
   final ValueChanged<List<Stroke>>? onDrawingCompleted;
@@ -22,8 +25,8 @@ class DrawingModulePage extends StatefulWidget {
 }
 
 class _DrawingModulePageState extends State<DrawingModulePage> {
-  late final Glyph _glyph = glyphs[widget.variant % glyphs.length];
-  WireColor? _selected;
+  late final _puzzle = drawingPuzzle(widget.variant);
+  int? _selected;
 
   @override
   void initState() {
@@ -34,15 +37,18 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
 
   void _confirm() {
     if (_selected == null) return;
-    Navigator.of(context).pop(_selected == _glyph.wire);
+    Navigator.of(
+      context,
+    ).pop(_selected == _puzzle.glyph.rule.solve(_puzzle.wires));
   }
 
-  Widget _buildWire(WireColor wire) {
-    final isSelected = wire == _selected;
+  Widget _buildWire(int index) {
+    final wire = _puzzle.wires[index];
+    final isSelected = index == _selected;
 
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _selected = wire),
+        onTap: () => setState(() => _selected = index),
         child: Container(
           height: 56,
           alignment: Alignment.center,
@@ -73,7 +79,8 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
       onConfirm: _confirm,
       children: [
         Text(
-          'Desenha o símbolo para o teu parceiro e corta o fio que ele indicar.',
+          'Desenha o símbolo para o teu parceiro. O traço apaga-se logo: '
+          'só ele vê o desenho completo. Corta o fio que ele indicar.',
           style: TextStyle(color: AppColors.textSecondary, height: 1.5),
         ),
         const SizedBox(height: 16),
@@ -90,7 +97,7 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
               SizedBox(
                 width: 96,
                 child: DrawingView(
-                  strokes: _glyph.lines,
+                  strokes: _puzzle.glyph.lines,
                   color: AppColors.neonPurple,
                 ),
               ),
@@ -100,6 +107,7 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
         const SizedBox(height: 16),
         DrawingPad(
           color: AppColors.neonPurple,
+          inkFade: DrawingModulePage.inkFade,
           onChanged: (strokes) {
             liveDrawing.value = strokes;
             widget.onDrawingChanged?.call(strokes);
@@ -114,9 +122,9 @@ class _DrawingModulePageState extends State<DrawingModulePage> {
         const SizedBox(height: 16),
         Row(
           children: [
-            for (final wire in WireColor.values) ...[
-              _buildWire(wire),
-              if (wire != WireColor.values.last) const SizedBox(width: 8),
+            for (var i = 0; i < _puzzle.wires.length; i++) ...[
+              _buildWire(i),
+              if (i != _puzzle.wires.length - 1) const SizedBox(width: 8),
             ],
           ],
         ),

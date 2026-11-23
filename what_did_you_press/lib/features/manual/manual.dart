@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:vibration/vibration.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
 import 'package:what_did_you_press/core/drawing.dart';
 import 'package:what_did_you_press/core/game_models.dart';
@@ -10,6 +10,7 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/manual/terminal.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/features/game/hack_effects.dart';
 import 'package:what_did_you_press/features/game/game_event.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
@@ -27,7 +28,7 @@ class ManualPage extends ConsumerStatefulWidget {
 }
 
 class _ManualPageState extends ConsumerState<ManualPage> {
-  HackType? _activeHack;
+  Timer? _hackVibration;
   String? _shownConnectionNotice;
   final ScrollController _scrollController = ScrollController();
   late final AppLifecycleListener _lifecycle;
@@ -52,7 +53,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
         ref
             .read(gameControllerProvider.notifier)
             .start(
-              moduleCount: ModuleType.values.length,
+              moduleCount: BombLoadout.defaultModuleCount,
               transport: widget.transport,
               authority: false,
             ),
@@ -66,6 +67,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
 
   @override
   void dispose() {
+    _stopHackVibration();
     _lifecycle.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -90,25 +92,31 @@ class _ManualPageState extends ConsumerState<ManualPage> {
     });
   }
 
-  void _simulateHack() {
-    final hacks = HackType.values;
-    final hack = hacks[Random().nextInt(hacks.length)];
-    setState(() => _activeHack = hack);
-    ref.read(gameControllerProvider.notifier).dispatch(HackLaunched(hack.name));
+  /// The "continuous vibration" attack buzzes this phone until countered.
+  void _syncHackVibration(bool active) {
+    if (!active) return _stopHackVibration();
+    if (_hackVibration != null) return;
+    void buzz() => Vibration.vibrate(duration: 600).catchError((Object _) {});
+    buzz();
+    _hackVibration = Timer.periodic(
+      const Duration(milliseconds: 850),
+      (_) => buzz(),
+    );
+  }
+
+  void _stopHackVibration() {
+    if (_hackVibration == null) return;
+    _hackVibration!.cancel();
+    _hackVibration = null;
+    Vibration.cancel().catchError((Object _) {});
   }
 
   Future<void> _openTerminal() async {
-    final remote = ref.read(gameControllerProvider).activeHack;
-    final active =
-        _activeHack ??
-        (remote == null
-            ? null
-            : HackType.values.where((item) => item.name == remote).firstOrNull);
+    final active = ref.read(gameControllerProvider).hack;
     final countered = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (context) => TerminalPage(activeHack: active)),
     );
     if (!mounted || countered != true) return;
-    setState(() => _activeHack = null);
     ref.read(gameControllerProvider.notifier).dispatch(const HackCountered());
   }
 
@@ -175,21 +183,26 @@ class _ManualPageState extends ConsumerState<ManualPage> {
   }
 
   Widget _buildGlyph(Glyph glyph) {
+    final color = glyph.rule.color?.color ?? AppColors.amber;
     return Container(
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(8),
       color: AppColors.background,
-      child: Column(
+      child: Row(
         children: [
-          Expanded(
+          SizedBox(
+            width: 64,
             child: DrawingView(
               strokes: glyph.lines,
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            glyph.wire.label,
-            style: TextStyle(color: glyph.wire.color, fontSize: 12),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              glyph.rule.label,
+              style: TextStyle(color: color, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -216,7 +229,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'CHAT DE VOZ CAÍDO — ${hack.symptom}',
+              'ATAQUE HACKER — ${hack.symptom}. Trava-o no terminal.',
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -260,7 +273,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
         children: [
           Expanded(
             child: Text(
-              '${module.type.label} · V${module.variant + 1}',
+              module.type.label,
               style: TextStyle(color: AppColors.textPrimary),
             ),
           ),
@@ -317,14 +330,11 @@ class _ManualPageState extends ConsumerState<ManualPage> {
 
   @override
   Widget build(BuildContext context) {
-    final hack = _activeHack;
     final game = ref.watch(gameControllerProvider);
-    final remoteHack = game.activeHack;
-    final visibleHack = remoteHack == null
-        ? hack
-        : HackType.values.where((item) => item.name == remoteHack).firstOrNull;
+    final visibleHack = game.hack;
     ref.listen<GameState>(gameControllerProvider, (_, next) {
       _scrollToDefuserModule(next);
+      _syncHackVibration(next.hack == HackType.vibration);
       final notice = next.connectionNotice;
       if (notice == null || notice == _shownConnectionNotice || !mounted) {
         return;
@@ -381,11 +391,6 @@ class _ManualPageState extends ConsumerState<ManualPage> {
           title: Text('MANUAL · ${game.partnerName}'),
           actions: [
             IconButton(
-              icon: const Icon(Icons.bug_report),
-              tooltip: 'Simular ataque',
-              onPressed: _simulateHack,
-            ),
-            IconButton(
               icon: const Icon(Icons.terminal),
               tooltip: 'Abrir terminal',
               onPressed: _openTerminal,
@@ -395,128 +400,150 @@ class _ManualPageState extends ConsumerState<ManualPage> {
         body: SafeArea(
           child: Stack(
             children: [
-              ListView(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(24.0),
-                children: [
-                  if (widget.transport != null) _buildBombStatus(),
-                  if (visibleHack != null) ...[
-                    _buildHackBanner(visibleHack),
-                    const SizedBox(height: 24),
-                  ],
-                  _buildSection(
-                    ModuleType.gyro.label,
-                    ModuleType.gyro.color,
-                    [
-                      _buildText(
-                        'Com o telemóvel na vertical, roda-o até ao ângulo indicado.',
-                      ),
-                      for (final entry in angleTable.entries)
-                        _buildRow(entry.key, '${entry.value}°'),
+              HackShake(
+                active: visibleHack == HackType.vibration,
+                child: ListView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(24.0),
+                  children: [
+                    if (widget.transport != null) _buildBombStatus(),
+                    if (visibleHack != null) ...[
+                      _buildHackBanner(visibleHack),
+                      const SizedBox(height: 24),
                     ],
-                    key: _sectionKeys[ModuleType.gyro],
-                    highlighted: activeType == ModuleType.gyro,
-                  ),
-                  _buildSection(
-                    ModuleType.compass.label,
-                    ModuleType.compass.color,
-                    [
-                      _buildText('Vira o telemóvel para o ponto cardeal.'),
-                      for (final entry in compassTable.entries)
-                        _buildRow(entry.key, entry.value),
-                    ],
-                    key: _sectionKeys[ModuleType.compass],
-                    highlighted: activeType == ModuleType.compass,
-                  ),
-                  _buildSection(
-                    ModuleType.morse.label,
-                    ModuleType.morse.color,
-                    [
-                      _buildText(
-                        'Descodifica a palavra e indica a frequência.',
-                      ),
-                      for (final entry in morseFrequencies.entries)
-                        _buildRow(entry.key, entry.value),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 4,
-                        children: [
-                          for (final entry in morseCode.entries)
-                            Text(
-                              '${entry.key} ${entry.value}',
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                        ],
-                      ),
-                    ],
-                    key: _sectionKeys[ModuleType.morse],
-                    highlighted: activeType == ModuleType.morse,
-                  ),
-                  _buildSection(
-                    ModuleType.symbols.label,
-                    ModuleType.symbols.color,
-                    [
-                      for (int i = 0; i < symbolRules.length; i++)
-                        _buildText('${i + 1}. ${symbolRules[i]}'),
-                    ],
-                    key: _sectionKeys[ModuleType.symbols],
-                    highlighted: activeType == ModuleType.symbols,
-                  ),
-                  _buildSection(
-                    ModuleType.drawing.label,
-                    ModuleType.drawing.color,
-                    [
-                      _buildText(
-                        'O operador desenha o símbolo que vê. Encontra-o abaixo '
-                        'e diz-lhe que fio cortar.',
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'DESENHO DO OPERADOR (EM DIRETO)',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          border: Border.all(color: AppColors.metalGrey),
+                    _buildSection(
+                      ModuleType.gyro.label,
+                      ModuleType.gyro.color,
+                      [
+                        _buildText(
+                          'Com o telemóvel na vertical, roda-o até ao ângulo indicado.',
                         ),
-                        child: ValueListenableBuilder<List<Stroke>>(
-                          valueListenable: liveDrawing,
-                          builder: (context, strokes, _) => DrawingView(
-                            strokes: strokes,
-                            color: AppColors.neonPurple,
+                        _buildText(
+                          'Pede ao operador os quatro símbolos, da esquerda '
+                          'para a direita, e calcula o ângulo:',
+                        ),
+                        for (int i = 0; i < angleRules.length; i++)
+                          _buildText('${i + 1}. ${angleRules[i]}'),
+                      ],
+                      key: _sectionKeys[ModuleType.gyro],
+                      highlighted: activeType == ModuleType.gyro,
+                    ),
+                    _buildSection(
+                      ModuleType.compass.label,
+                      ModuleType.compass.color,
+                      [
+                        _buildText(
+                          'Pede ao operador os quatro números e descobre para '
+                          'que ponto cardeal deve virar o telemóvel:',
+                        ),
+                        for (int i = 0; i < compassRules.length; i++)
+                          _buildText('${i + 1}. ${compassRules[i]}'),
+                      ],
+                      key: _sectionKeys[ModuleType.compass],
+                      highlighted: activeType == ModuleType.compass,
+                    ),
+                    _buildSection(
+                      ModuleType.morse.label,
+                      ModuleType.morse.color,
+                      [
+                        _buildText(
+                          'Descodifica a palavra e indica a frequência.',
+                        ),
+                        for (final entry in morseFrequencies.entries)
+                          _buildRow(entry.key, entry.value),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 4,
+                          children: [
+                            for (final entry in morseCode.entries)
+                              Text(
+                                '${entry.key} ${entry.value}',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                      key: _sectionKeys[ModuleType.morse],
+                      highlighted: activeType == ModuleType.morse,
+                    ),
+                    _buildSection(
+                      ModuleType.symbols.label,
+                      ModuleType.symbols.color,
+                      [
+                        for (int i = 0; i < symbolRules.length; i++)
+                          _buildText('${i + 1}. ${symbolRules[i]}'),
+                      ],
+                      key: _sectionKeys[ModuleType.symbols],
+                      highlighted: activeType == ModuleType.symbols,
+                    ),
+                    _buildSection(
+                      ModuleType.switches.label,
+                      ModuleType.switches.color,
+                      [
+                        _buildText(
+                          'Pede ao operador a cor e a posição inicial de cada '
+                          'interruptor, da esquerda para a direita.',
+                        ),
+                        for (int i = 0; i < switchRules.length; i++)
+                          _buildText(
+                            i == 0 ? switchRules[i] : '$i. ${switchRules[i]}',
+                          ),
+                      ],
+                      key: _sectionKeys[ModuleType.switches],
+                      highlighted: activeType == ModuleType.switches,
+                    ),
+                    _buildSection(
+                      ModuleType.drawing.label,
+                      ModuleType.drawing.color,
+                      [
+                        _buildText(
+                          'O operador desenha o símbolo que vê, mas não vê o '
+                          'próprio traço. Encontra-o abaixo — os símbolos de '
+                          'cada família só diferem num pormenor — e diz-lhe que '
+                          'fio cortar. Os fios dele estão por uma ordem '
+                          'aleatória: pede-lha quando a regra depende da posição.',
+                        ),
+                        _buildText(wireRulesNote),
+                        const SizedBox(height: 12),
+                        Text(
+                          'DESENHO DO OPERADOR (EM DIRETO)',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            border: Border.all(color: AppColors.metalGrey),
+                          ),
+                          child: ValueListenableBuilder<List<Stroke>>(
+                            valueListenable: liveDrawing,
+                            builder: (context, strokes, _) => DrawingView(
+                              strokes: strokes,
+                              color: AppColors.neonPurple,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      GridView.count(
-                        crossAxisCount: 3,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 0.8,
-                        children: [
-                          for (final glyph in glyphs) _buildGlyph(glyph),
-                        ],
-                      ),
-                    ],
-                    key: _sectionKeys[ModuleType.drawing],
-                    highlighted: activeType == ModuleType.drawing,
-                  ),
-                  _buildSection('HACKERS', AppColors.textPrimary, [
-                    for (final type in HackType.values)
-                      _buildRow(type.symptom, type.command),
-                    const SizedBox(height: 12),
-                    _buildText(
-                      'Às escuras não vais conseguir ler isto: o terminal '
-                      'mostra a senha cifrada. Recua cada letra o número de '
-                      'posições do desvio (ex.: desvio +2, D → B).',
+                        const SizedBox(height: 16),
+                        for (final glyph in glyphs) _buildGlyph(glyph),
+                      ],
+                      key: _sectionKeys[ModuleType.drawing],
+                      highlighted: activeType == ModuleType.drawing,
                     ),
-                  ]),
-                ],
+                    _buildSection('HACKERS', AppColors.textPrimary, [
+                      for (final type in HackType.values)
+                        _buildRow(type.symptom, type.command),
+                      const SizedBox(height: 12),
+                      _buildText(
+                        'Às escuras não vais conseguir ler isto: o terminal '
+                        'mostra a senha cifrada. Recua cada letra o número de '
+                        'posições do desvio (ex.: desvio +2, D → B).',
+                      ),
+                    ]),
+                  ],
+                ),
               ),
               if (visibleHack == HackType.lights)
                 Positioned.fill(child: _buildBlackout()),

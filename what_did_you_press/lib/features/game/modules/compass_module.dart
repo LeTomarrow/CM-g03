@@ -14,12 +14,11 @@ class CompassModulePage extends ConsumerWidget {
 
   static const double _tolerance = 15;
 
-  String get _sequence =>
-      compassTable.keys.elementAt(variant % compassTable.length);
+  List<int> get _sequence => compassSequence(variant);
 
   void _confirm(BuildContext context, CompassSample? sample) {
     if (sample == null || !sample.canConfirm(_tolerance)) return;
-    final target = cardinalAngles[compassTable[_sequence]]!.toDouble();
+    final target = cardinalAngles[solveCompass(_sequence)]!.toDouble();
     Navigator.of(
       context,
     ).pop(angleDistance(sample.heading!, target) <= _tolerance);
@@ -63,7 +62,7 @@ class CompassModulePage extends ConsumerWidget {
       onConfirm: () => _confirm(context, sample),
       confirmEnabled: ready,
       children: [
-        SequencePanel(sequence: _sequence, color: AppColors.amber),
+        SequencePanel(sequence: _sequence.join(' '), color: AppColors.amber),
         const SizedBox(height: 32),
         Container(
           padding: const EdgeInsets.all(16),

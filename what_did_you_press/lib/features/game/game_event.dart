@@ -58,11 +58,7 @@ final class ManualFocusRequested extends GameEvent {
   final int index;
 }
 
-final class HackLaunched extends GameEvent {
-  const HackLaunched(this.hack);
-  final String hack;
-}
-
+/// The manual stopped the active attack in the terminal.
 final class HackCountered extends GameEvent {
   const HackCountered();
 }

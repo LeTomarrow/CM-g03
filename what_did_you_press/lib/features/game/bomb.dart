@@ -11,9 +11,11 @@ import 'package:what_did_you_press/features/game/modules/drawing_module.dart';
 import 'package:what_did_you_press/features/game/modules/gyro_module.dart';
 import 'package:what_did_you_press/features/game/modules/morse_module.dart';
 import 'package:what_did_you_press/features/game/modules/symbols_module.dart';
+import 'package:what_did_you_press/features/game/modules/switches_module.dart';
 import 'package:what_did_you_press/features/game/result.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
 import 'package:what_did_you_press/features/game/game_event.dart';
+import 'package:what_did_you_press/features/game/hack_effects.dart';
 import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
@@ -55,7 +57,7 @@ class _BombPageState extends ConsumerState<BombPage> {
         ref
             .read(gameControllerProvider.notifier)
             .start(
-              moduleCount: ModuleType.values.length,
+              moduleCount: BombLoadout.defaultModuleCount,
               transport: widget.transport,
             ),
       );
@@ -126,6 +128,7 @@ class _BombPageState extends ConsumerState<BombPage> {
       ModuleType.compass => CompassModulePage(variant: variant),
       ModuleType.morse => MorseModulePage(variant: variant),
       ModuleType.symbols => SymbolsModulePage(variant: variant),
+      ModuleType.switches => SwitchesModulePage(variant: variant),
       ModuleType.drawing => DrawingModulePage(
         variant: variant,
         onDrawingChanged: (strokes) =>
@@ -217,7 +220,7 @@ class _BombPageState extends ConsumerState<BombPage> {
     final isCritical = game.timeLeft.inSeconds < 60;
 
     // Back button / gesture asks first instead of silently quitting.
-    return PopScope(
+    final page = PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _confirmLeave();
@@ -294,6 +297,7 @@ class _BombPageState extends ConsumerState<BombPage> {
                 ),
                 const SizedBox(height: 12),
               ],
+              const HackWarning(),
               if (game.linkWarning != null) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -332,5 +336,6 @@ class _BombPageState extends ConsumerState<BombPage> {
         ),
       ),
     );
+    return HackFlash(child: page);
   }
 }

@@ -113,6 +113,13 @@ GameState reducePeerCommand(
   Map<String, dynamic> payload,
 ) {
   if (type == 'hack') {
+    // The operator launches attacks; the manual reports the counter-attack.
+    final countered = payload['countered'];
+    if (countered != null) {
+      return countered == state.activeHack
+          ? state.copyWith(clearHack: true)
+          : state;
+    }
     final hack = payload['hack'];
     return hack is String ? state.copyWith(activeHack: hack) : state;
   }

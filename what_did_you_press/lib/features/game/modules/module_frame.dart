@@ -8,6 +8,7 @@ import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/core/segment_display.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/features/game/hack_effects.dart';
 
 /// Shared layout for every bomb module: title, content and confirm button.
 /// Module pages pop `true` when solved and `false` on a wrong answer.
@@ -29,7 +30,7 @@ class ModuleFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final page = Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -152,6 +153,7 @@ class ModuleFrame extends StatelessWidget {
         ),
       ),
     );
+    return HackFlash(child: page);
   }
 }
 

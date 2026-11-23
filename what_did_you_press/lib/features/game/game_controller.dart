@@ -7,6 +7,7 @@ import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/features/game/drawing_codec.dart';
 import 'package:what_did_you_press/features/game/game_event.dart';
 import 'package:what_did_you_press/features/game/game_reducer.dart';
+import 'package:what_did_you_press/features/game/hack_scheduler.dart';
 import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/services/game_protocol.dart';
 import 'package:what_did_you_press/services/game_transport.dart';
@@ -37,6 +38,7 @@ class GameController extends Notifier<GameState> {
   List<Stroke>? _pendingDrawing;
   Timer? _heartbeat;
   int _silentTicks = 0;
+  HackScheduler? _hacks;
 
   @override
   GameState build() {
@@ -87,6 +89,7 @@ class GameController extends Notifier<GameState> {
       return;
     }
     _engine = engine;
+    _hacks = ref.read(hackSchedulerProvider)();
     state = state.copyWith(
       started: true,
       loadout: BombLoadout.generate(
@@ -121,10 +124,12 @@ class GameController extends Notifier<GameState> {
         _send('command', {'command': 'player_name', 'name': value});
       case AppLifecycleChanged(:final foreground):
         _send('command', {'command': 'presence', 'away': !foreground});
-      case HackLaunched(:final hack):
-        _send('hack', {'hack': hack});
       case HackCountered():
+        final hack = state.activeHack;
+        if (hack == null) return;
         state = state.copyWith(clearHack: true);
+        // The operator owns the attack; this asks it to end there too.
+        _send('hack', {'countered': hack});
       case DrawingChanged(:final strokes):
         _throttleDrawing(strokes);
       case DrawingCompleted(:final strokes):
@@ -179,9 +184,27 @@ class GameController extends Notifier<GameState> {
           payload: {'reason': 'connection_lost'},
         ),
       );
-    } else if (_silentTicks >= silenceWarningTicks && !state.partnerSilent) {
+      return;
+    }
+    if (_silentTicks >= silenceWarningTicks && !state.partnerSilent) {
       state = state.copyWith(partnerSilent: true);
     }
+    _scheduleHack();
+  }
+
+  /// Operator only: the hackers strike at random, one attack at a time.
+  void _scheduleHack() {
+    final hacks = _hacks;
+    if (hacks == null ||
+        !state.started ||
+        state.status != BombEngineStatus.running ||
+        state.activeHack != null) {
+      return;
+    }
+    final hack = hacks.tick();
+    if (hack == null) return;
+    state = state.copyWith(activeHack: hack.name);
+    _send('hack', {'hack': hack.name});
   }
 
   void _onEngineState(BombEngineState next) {

@@ -51,15 +51,32 @@ class BombModuleState {
 class BombLoadout {
   const BombLoadout({required this.seed, required this.modules});
 
-  factory BombLoadout.generate({required int seed, int moduleCount = 5}) {
+  /// Ângulo and Bússola play alike (a sequence, a sum, orient the phone), so
+  /// each bomb gets one of them plus every other module.
+  /// [moduleCount] is smaller only in tests.
+  static const int defaultModuleCount = 5;
+
+  factory BombLoadout.generate({
+    required int seed,
+    int moduleCount = defaultModuleCount,
+  }) {
     final random = Random(seed);
-    final types = [...ModuleType.values]..shuffle(random);
+    final orientation = random.nextBool()
+        ? ModuleType.gyro
+        : ModuleType.compass;
+    final types = [
+      for (final type in ModuleType.values)
+        if (type != ModuleType.gyro && type != ModuleType.compass) type,
+      orientation,
+    ]..shuffle(random);
+    assert(types.length == defaultModuleCount);
     final modules = List.generate(moduleCount, (index) {
-      final type = types[index % types.length];
+      final type = types[index];
       return BombModuleState(
         id: 'module-$index',
         type: type,
-        variant: random.nextInt(3),
+        // A seed for the module's generated puzzle, not a table index.
+        variant: random.nextInt(1 << 30),
       );
     });
     return BombLoadout(seed: seed, modules: List.unmodifiable(modules));

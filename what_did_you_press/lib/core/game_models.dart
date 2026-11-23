@@ -18,7 +18,8 @@ enum ModuleType {
   compass('BÚSSOLA', Icons.explore, AppColors.amber),
   morse('MORSE', Icons.vibration, AppColors.success),
   symbols('SÍMBOLOS', Icons.category, AppColors.danger),
-  drawing('DESENHO', Icons.draw, AppColors.neonPurple);
+  drawing('DESENHO', Icons.draw, AppColors.neonPurple),
+  switches('INTERRUPTORES', Icons.toggle_on, AppColors.copper);
 
   const ModuleType(this.label, this.icon, this.color);
 

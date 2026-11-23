@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/features/game/game_reducer.dart';
@@ -182,8 +183,27 @@ void main() {
         'name': 'Sentinela',
       });
       expect(named.partnerName, 'Sentinela');
-      final hacked = reducePeerCommand(named, 'hack', {'hack': 'glitch'});
-      expect(hacked.activeHack, 'glitch');
+      final hacked = reducePeerCommand(named, 'hack', {'hack': 'flash'});
+      expect(hacked.activeHack, 'flash');
+      expect(hacked.hack, HackType.flash);
+    });
+
+    test('a counter-attack only clears the attack it names', () {
+      final hacked = GameState.initial().copyWith(activeHack: 'lights');
+      final wrong = reducePeerCommand(hacked, 'hack', {'countered': 'flash'});
+      expect(wrong.activeHack, 'lights');
+      final cleared = reducePeerCommand(hacked, 'hack', {
+        'countered': 'lights',
+      });
+      expect(cleared.activeHack, isNull);
+    });
+
+    test('attack effects stop once the bomb is no longer live', () {
+      final hacked = GameState.initial().copyWith(activeHack: 'vibration');
+      expect(hacked.hack, HackType.vibration);
+      expect(hacked.copyWith(status: BombEngineStatus.defused).hack, isNull);
+      expect(hacked.copyWith(connectionNotice: 'fim').hack, isNull);
+      expect(GameState.initial().copyWith(activeHack: 'unknown').hack, isNull);
     });
   });
 
