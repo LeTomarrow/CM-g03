@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:what_did_you_press/core/game_models.dart';
@@ -532,8 +534,15 @@ class RoomService implements GameTransport {
     _events.add(_room);
   }
 
+  /// Why the session closed, so the lobby can tell the player the actual
+  /// cause instead of guessing that the partner left.
+  Object? get closeReason => _closeReason;
+  Object? _closeReason;
+
   void _fail(Object error) {
     if (_disposed || _protocol?.phase == 'closed') return;
+    _closeReason = error;
+    debugPrint('RoomService: session closed: $error');
     if (_protocol?.phase == 'playing') {
       _gameEvents.add(
         GameMessage(

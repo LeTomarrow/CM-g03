@@ -165,10 +165,17 @@ class LobbyController extends Notifier<LobbyState> {
       // Once started, the game screens report the disconnection instead.
       if (state.opening) return;
       final isHost = (room ?? state.room)?.hostUid == _rooms.currentUserId;
+      final reason = _rooms.closeReason;
+      final next = isHost
+          ? 'Cria uma nova sala para continuar.'
+          : 'Podes criar ou entrar noutra sala.';
       _closeLocally(
-        notice: isHost
-            ? 'O outro jogador saiu. Cria uma nova sala para continuar.'
-            : 'O anfitrião encerrou a sala. Podes criar ou entrar noutra sala.',
+        // Any failure closes the session; say which one it was.
+        notice: reason != null
+            ? '${_errorMessage(reason)} $next'
+            : isHost
+            ? 'O outro jogador saiu. $next'
+            : 'O anfitrião encerrou a sala. $next',
       );
       return;
     }

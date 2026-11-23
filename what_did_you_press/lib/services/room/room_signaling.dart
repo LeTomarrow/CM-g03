@@ -101,8 +101,14 @@ class RoomMailbox {
       });
 
   /// Document data, or null once the host deleted it.
-  Stream<Map<String, dynamic>?> watch() =>
-      _ref.snapshots().map((snapshot) => snapshot.data());
+  ///
+  /// A missing document only counts once the server says so: right after
+  /// the reservation transaction, the local cache can still report the
+  /// room as missing, which used to close a freshly created room.
+  Stream<Map<String, dynamic>?> watch() => _ref
+      .snapshots()
+      .where((snapshot) => snapshot.exists || !snapshot.metadata.isFromCache)
+      .map((snapshot) => snapshot.data());
 
   /// Deletes the mailbox only if it still belongs to [session].
   Future<void> deleteIfSession(String session) async {

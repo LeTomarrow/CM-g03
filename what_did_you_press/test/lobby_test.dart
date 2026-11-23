@@ -17,6 +17,9 @@ Widget _lobby(FakeRooms rooms) => ProviderScope(
 );
 
 class FakeRooms implements RoomService {
+  @override
+  Object? get closeReason => null;
+
   FakeRooms(this.uid);
   final String uid;
   final events = StreamController<Room?>.broadcast();

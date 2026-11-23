@@ -10,6 +10,9 @@ import 'package:what_did_you_press/services/room_service.dart';
 import 'package:what_did_you_press/services/service_providers.dart';
 
 class _Rooms implements RoomService {
+  @override
+  Object? get closeReason => null;
+
   _Rooms(this.uid);
   final String uid;
   final events = StreamController<Room?>.broadcast();
