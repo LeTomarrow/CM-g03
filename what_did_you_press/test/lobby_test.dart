@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:what_did_you_press/core/app_theme.dart';
@@ -8,6 +9,12 @@ import 'package:what_did_you_press/core/game_models.dart';
 import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/lobby.dart';
 import 'package:what_did_you_press/services/room_service.dart';
+import 'package:what_did_you_press/services/service_providers.dart';
+
+Widget _lobby(FakeRooms rooms) => ProviderScope(
+  overrides: [roomServiceFactoryProvider.overrideWithValue(() => rooms)],
+  child: MaterialApp(theme: AppTheme.darkTheme, home: const LobbyPage()),
+);
 
 class FakeRooms implements RoomService {
   FakeRooms(this.uid);
@@ -55,12 +62,7 @@ void main() {
     tester,
   ) async {
     final rooms = FakeRooms('guest');
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: LobbyPage(roomServiceFactory: () => rooms),
-      ),
-    );
+    await tester.pumpWidget(_lobby(rooms));
     await tester.enterText(find.byType(TextField), '123456');
     await tester.ensureVisible(find.text('ENTRAR'));
     await tester.tap(find.text('ENTRAR'));
@@ -88,12 +90,7 @@ void main() {
     tester,
   ) async {
     final rooms = FakeRooms('host');
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: LobbyPage(roomServiceFactory: () => rooms),
-      ),
-    );
+    await tester.pumpWidget(_lobby(rooms));
     await tester.ensureVisible(find.text('CRIAR'));
     await tester.tap(find.text('CRIAR'));
     await tester.pumpAndSettle();

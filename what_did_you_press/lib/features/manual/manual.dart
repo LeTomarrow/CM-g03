@@ -10,16 +10,17 @@ import 'package:what_did_you_press/core/manual_data.dart';
 import 'package:what_did_you_press/core/widgets.dart';
 import 'package:what_did_you_press/features/manual/terminal.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/features/game/game_event.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/game_state.dart';
-import 'package:what_did_you_press/services/room_service.dart';
+import 'package:what_did_you_press/services/game_transport.dart';
 import 'package:what_did_you_press/features/app_state.dart';
 
 class ManualPage extends ConsumerStatefulWidget {
-  const ManualPage({super.key, this.roomService});
+  const ManualPage({super.key, this.transport});
 
-  final RoomService? roomService;
+  final GameTransport? transport;
 
   @override
   ConsumerState<ManualPage> createState() => _ManualPageState();
@@ -43,12 +44,14 @@ class _ManualPageState extends ConsumerState<ManualPage> {
             .read(gameControllerProvider.notifier)
             .start(
               moduleCount: ModuleType.values.length,
-              roomService: widget.roomService,
+              transport: widget.transport,
               authority: false,
             ),
       );
       final name = ref.read(profileProvider).asData?.value.name;
-      if (name != null) ref.read(gameControllerProvider.notifier).publishPlayerName(name);
+      if (name != null) {
+        ref.read(gameControllerProvider.notifier).dispatch(PlayerNameSet(name));
+      }
     });
   }
 
@@ -81,7 +84,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
     final hacks = HackType.values;
     final hack = hacks[Random().nextInt(hacks.length)];
     setState(() => _activeHack = hack);
-    ref.read(gameControllerProvider.notifier).publishHack(hack.name);
+    ref.read(gameControllerProvider.notifier).dispatch(HackLaunched(hack.name));
   }
 
   Future<void> _openTerminal() async {
@@ -97,7 +100,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
     );
     if (!mounted || countered != true) return;
     setState(() => _activeHack = null);
-    ref.read(gameControllerProvider.notifier).clearHack();
+    ref.read(gameControllerProvider.notifier).dispatch(const HackCountered());
   }
 
   Future<void> _confirmLeave() async {
@@ -234,7 +237,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
       for (var index = 0; index < game.loadout.modules.length; index++)
         _buildModuleStatusRow(
           game.loadout.modules[index],
-          () => controller.sendModuleFocus(index),
+          () => controller.dispatch(ManualFocusRequested(index)),
         ),
     ]);
   }
@@ -381,7 +384,7 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                 controller: _scrollController,
                 padding: const EdgeInsets.all(24.0),
                 children: [
-                  if (widget.roomService != null) _buildBombStatus(),
+                  if (widget.transport != null) _buildBombStatus(),
                   if (visibleHack != null) ...[
                     _buildHackBanner(visibleHack),
                     const SizedBox(height: 24),

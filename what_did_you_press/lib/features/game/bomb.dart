@@ -13,18 +13,20 @@ import 'package:what_did_you_press/features/game/modules/morse_module.dart';
 import 'package:what_did_you_press/features/game/modules/symbols_module.dart';
 import 'package:what_did_you_press/features/game/result.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/features/game/game_event.dart';
 import 'package:what_did_you_press/features/game/game_state.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/bomb_loadout.dart';
-import 'package:what_did_you_press/services/room_service.dart';
+import 'package:what_did_you_press/services/game_transport.dart';
 import 'package:what_did_you_press/features/app_state.dart';
 
 class BombPage extends ConsumerStatefulWidget {
-  const BombPage({super.key, this.onFinished, this.roomService});
+  const BombPage({super.key, this.onFinished, this.transport});
 
-  /// Called once with `true` if defused; this page is gone by then.
-  final void Function(bool defused)? onFinished;
-  final RoomService? roomService;
+  /// Called once with the final result (defused, exploded or abandoned when
+  /// the partner left); this page is gone by then.
+  final void Function(BombEngineStatus result)? onFinished;
+  final GameTransport? transport;
 
   @override
   ConsumerState<BombPage> createState() => _BombPageState();
@@ -45,12 +47,12 @@ class _BombPageState extends ConsumerState<BombPage> {
             .read(gameControllerProvider.notifier)
             .start(
               moduleCount: ModuleType.values.length,
-              roomService: widget.roomService,
+              transport: widget.transport,
             ),
       );
       final name = ref.read(profileProvider).asData?.value.name;
       if (name != null) {
-        ref.read(gameControllerProvider.notifier).publishPlayerName(name);
+        ref.read(gameControllerProvider.notifier).dispatch(PlayerNameSet(name));
       }
     });
   }
@@ -65,11 +67,17 @@ class _BombPageState extends ConsumerState<BombPage> {
         ref.read(profileProvider.notifier).recordGame(defused: defused),
       );
     }
-    widget.onFinished?.call(defused);
+    widget.onFinished?.call(
+      abandoned
+          ? BombEngineStatus.abandoned
+          : defused
+          ? BombEngineStatus.defused
+          : BombEngineStatus.exploded,
+    );
     try {
       await ref
           .read(gameControllerProvider.notifier)
-          .publishGameEnded(defused, reason: reason);
+          .dispatch(GameEndAnnounced(defused: defused, reason: reason));
     } catch (_) {
       // Local result must still be shown if the peer has already disconnected.
     }
@@ -97,6 +105,7 @@ class _BombPageState extends ConsumerState<BombPage> {
   }
 
   Widget _pageFor(ModuleType type, int variant) {
+    final controller = ref.read(gameControllerProvider.notifier);
     return switch (type) {
       ModuleType.gyro => GyroModulePage(variant: variant),
       ModuleType.compass => CompassModulePage(variant: variant),
@@ -104,12 +113,10 @@ class _BombPageState extends ConsumerState<BombPage> {
       ModuleType.symbols => SymbolsModulePage(variant: variant),
       ModuleType.drawing => DrawingModulePage(
         variant: variant,
-        onDrawingChanged: ref
-            .read(gameControllerProvider.notifier)
-            .publishDrawing,
-        onDrawingCompleted: ref
-            .read(gameControllerProvider.notifier)
-            .publishDrawingSnapshot,
+        onDrawingChanged: (strokes) =>
+            controller.dispatch(DrawingChanged(strokes)),
+        onDrawingCompleted: (strokes) =>
+            controller.dispatch(DrawingCompleted(strokes)),
       ),
     };
   }
@@ -120,19 +127,17 @@ class _BombPageState extends ConsumerState<BombPage> {
         .loadout
         .modules[moduleIndex];
     final controller = ref.read(gameControllerProvider.notifier);
-    controller.publishModuleFocus(moduleIndex);
+    controller.dispatch(ModuleOpened(moduleIndex));
     final solved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) => _pageFor(module.type, module.variant),
       ),
     );
-    controller.publishModuleFocus(null);
+    controller.dispatch(const ModuleClosed());
     if (!mounted || solved == null) return;
-    if (solved) {
-      controller.solveModule(moduleIndex);
-    } else {
-      controller.registerStrike(moduleIndex);
-    }
+    controller.dispatch(
+      solved ? SolveModuleRequested(moduleIndex) : StrikeRequested(moduleIndex),
+    );
   }
 
   Widget _buildModuleCard(int index, BombModuleState module) {

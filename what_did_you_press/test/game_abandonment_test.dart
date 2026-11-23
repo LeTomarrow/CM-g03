@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:what_did_you_press/features/game/bomb_engine.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
+import 'package:what_did_you_press/features/game/game_event.dart';
 import 'package:what_did_you_press/services/game_protocol.dart';
-import 'package:what_did_you_press/services/room_service.dart';
+import 'package:what_did_you_press/services/game_transport.dart';
 
-class _GameRoom implements RoomService {
+class _GameRoom implements GameTransport {
   final messages = StreamController<GameMessage>.broadcast();
   final sentTypes = <String>[];
 
@@ -31,9 +32,6 @@ class _GameRoom implements RoomService {
       payload: {'reason': reason},
     ),
   );
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -74,7 +72,7 @@ void main() {
       });
       await container
           .read(gameControllerProvider.notifier)
-          .start(moduleCount: 2, roomService: room, authority: false);
+          .start(moduleCount: 2, transport: room, authority: false);
       final initial = container.read(gameControllerProvider);
       room.messages.add(
         GameMessage(
@@ -132,7 +130,7 @@ void main() {
           await room.messages.close();
         });
         final controller = container.read(gameControllerProvider.notifier);
-        await controller.start(moduleCount: 2, roomService: room);
+        await controller.start(moduleCount: 2, transport: room);
         final abandoned = Completer<void>();
         final listener = container.listen(gameControllerProvider, (_, next) {
           if (next.status == BombEngineStatus.abandoned &&
@@ -146,8 +144,8 @@ void main() {
         final terminal = container.read(gameControllerProvider);
         final sent = room.sentTypes.length;
         room.end(reason);
-        controller.solveModule(0);
-        controller.registerStrike(0);
+        await controller.dispatch(const SolveModuleRequested(0));
+        await controller.dispatch(const StrikeRequested(0));
         await Future<void>.delayed(const Duration(milliseconds: 450));
         expect(
           container.read(gameControllerProvider).status,

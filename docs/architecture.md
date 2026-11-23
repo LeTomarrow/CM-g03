@@ -121,8 +121,20 @@ As Views devem limitar-se a:
 - `gameControllerProvider`.
 
 O controller coordena o `BombEngine`, recebe eventos e publica o estado que a UI observa.
+As transições de estado vivem em funções puras em `game_reducer.dart`.
 
-A lobby ainda contém parte da coordenação diretamente em `_LobbyPageState`. Essa é a próxima área a migrar para `LobbyController`.
+Os services chegam às páginas por providers (`services/service_providers.dart`):
+`bombServiceProvider` e `roomServiceFactoryProvider`. Como cada `RoomService` é
+uma sessão descartável, a lobby recebe uma fábrica e cria um service por sala.
+Os testes substituem estes providers por fakes.
+
+A lobby e o mundo têm ViewModels próprios: `LobbyController` (`LobbyState`,
+um por página através de `lobbyControllerProvider(bombId)`) e
+`WorldController` (`WorldState`). As páginas só observam o estado, chamam
+métodos e tratam de UI: campo de texto, diálogos, snackbars e navegação.
+Quando o jogo começa, `LobbyController.handOff()` entrega a sessão
+(`RoomService`, papel e resolução da bomba do mundo) aos ecrãs de jogo e
+deixa de a fechar.
 
 ### Domain
 
@@ -142,7 +154,11 @@ O domínio não deve depender de widgets Flutter, Firestore ou WebRTC quando nã
 
 Contém integrações externas:
 
-- `RoomService`: autenticação anónima, signaling e DataChannel;
+- `RoomService`: orquestra uma sessão de lobby e implementa `GameTransport`;
+  - `RoomSignaling` / `RoomMailbox`: documento `rooms/{code}` no Firestore (SDP e ICE);
+  - `PeerLink`: `RTCPeerConnection` e DataChannel `room-v1`, só transporta texto;
+  - `RoomProtocol`: máquina de estados da lobby;
+- `GameTransport`: interface mínima de mensagens de jogo usada pelo `GameController`;
 - `BombService`: Firestore e bombas do mundo;
 - `BombEngine`: timer e regras autoritárias da bomba;
 - `flutter_webrtc`: ligação peer-to-peer;
@@ -152,7 +168,21 @@ Contém integrações externas:
 
 ### 4.1 MVVM na aplicação
 
-A estrutura geral aproxima-se de MVVM:
+A app segue MVVM; o jogo é a exceção (ver 4.2):
+
+| Ecrã | ViewModel |
+|---|---|
+| Perfil, Definições | `ProfileController`, `SettingsController` |
+| Lobby | `LobbyController` |
+| Mundo | `WorldController` |
+| Módulo da bússola | `CompassController` |
+| Bomba e Manual | `GameController` (MVI) |
+
+Os minijogos gyro, morse, símbolos e desenho guardam apenas estado local de
+interação e devolvem sucesso ou falha; a `BombPage` converte esse resultado
+num evento MVI.
+
+Estrutura:
 
 ```text
 View ───── observa ───── ViewModel / Controller
@@ -170,16 +200,32 @@ Em Flutter, o ViewModel é representado por um `Notifier` Riverpod. A View não 
 O jogo utiliza uma variante de MVI:
 
 ```text
-GameEvent → GameController → GameState → View
+View ── GameEvent ──► GameController.dispatch ──► reducer puro ──► GameState ──► View
+                              │
+                              └── efeitos: BombEngine (comandos), GameTransport (mensagens)
+BombEngine ── EngineStateReceived ──┘
+GameTransport ── RemoteMessageReceived ──┘
 ```
 
-Eventos atuais:
+Todas as entradas passam por `dispatch(GameEvent)`:
 
-- `SolveModuleRequested`;
-- `StrikeRequested`;
-- `EngineStateReceived`.
+- intents do operador: `ModuleOpened`, `ModuleClosed`, `SolveModuleRequested`,
+  `StrikeRequested`, `DrawingChanged`, `DrawingCompleted`, `GameEndAnnounced`;
+- intents do manual: `ManualFocusRequested`, `HackLaunched`, `HackCountered`;
+- ambos: `PlayerNameSet`;
+- sistema: `EngineStateReceived`, `RemoteMessageReceived`.
 
-As ações públicas do controller transformam intenções da UI em eventos. O estado recebido do isolate também entra no mesmo fluxo antes de atualizar a UI.
+As Views não chamam métodos de negócio do controller; enviam eventos. Os
+reducers (`reduceEngineState`, `reduceSnapshot`, `reduceEnded`,
+`reducePeerCommand`) são funções puras e devolvem a mesma instância quando
+ignoram a entrada. O controller só executa efeitos. `start()` continua a ser
+um método de ciclo de vida, porque cria o isolate e liga o transporte.
+
+O `BombEngine` não é um segundo MVI: é um actor num isolate. Recebe comandos
+(`solve`, `strike`, `abandon`) e devolve o estado completo a cada 200 ms.
+
+O desenho remoto continua num `ValueNotifier` global (`liveDrawing`) e não
+no `GameState`; é estado de apresentação de alta frequência.
 
 Este modelo é apropriado para o jogo porque facilita:
 
@@ -413,9 +459,9 @@ Defuser interage com módulo
   ↓
 Módulo devolve sucesso/erro
   ↓
-GameController recebe evento
+BombPage envia SolveModuleRequested ou StrikeRequested
   ↓
-BombEngine.solveModule() ou registerStrike()
+GameController.dispatch → BombEngine.solveModule() ou registerStrike()
   ↓
 Engine produz novo estado
   ↓
@@ -436,7 +482,8 @@ um resultado concluído e os snapshots deixam de ser publicados após a saída.
 
 As estatísticas continuam a ser registadas apenas no perfil do operador.
 Uma partida abandonada não conta como bomba desarmada ou explodida. No modo
-mundo, mantém-se a resolução existente da bomba como tentativa sem sucesso.
+mundo, a bomba é resolvida como `abandoned` e volta a ficar armada para outros
+jogadores; só a saída voluntária do operador a faz explodir.
 O manual mantém o diálogo de fim de sessão e regresso ao menu.
 
 ### Snapshot para o manual
@@ -575,17 +622,18 @@ Já implementado:
 - `BombEngine` no isolate do defuser;
 - `GameState`, `GameEvent` e `GameController` com Riverpod;
 - publicação de snapshots da bomba;
-- resolução de bombas do mundo.
+- resolução de bombas do mundo (uma partida abandonada pelo parceiro volta a
+  armar a bomba, através de `worldOutcomeFor`);
+- `GameTransport` independente do `RoomService`;
+- `RoomService` dividido em `RoomSignaling`, `PeerLink` e `RoomProtocol`;
+- services injetados por providers Riverpod;
+- reducers puros do jogo com testes isolados (`test/game_reducer_test.dart`).
 
 Ainda por implementar:
 
-- `LobbyState` e `LobbyController`;
-- separar `RoomService` em repository e services menores;
-- `GameTransport` independente do `RoomService`;
 - comandos de jogo versionados para cada módulo;
 - confirmação e deduplicação de comandos;
 - sincronização dos resultados no manual;
-- testes isolados do `GameController`;
 - testes de integração entre dois peers reais.
 
 A reconexão automática continua deliberadamente fora do protocolo atual. Como
@@ -596,24 +644,21 @@ segura exige uma versão própria do protocolo de sessão.
 
 ### Fase 1 — completar a vertical do jogo
 
-1. Criar `GameTransport` como abstração sobre o DataChannel.
+1. ~~Criar `GameTransport` como abstração sobre o DataChannel.~~ Feito.
 2. Expandir o comando `module_focus` para comandos de input específicos de cada módulo.
 3. Validar revisões e ignorar snapshots antigos.
 4. Testar o mesmo cenário em dois controllers independentes.
 
 ### Fase 2 — migrar a lobby
 
-1. Criar `LobbyState`.
-2. Criar `LobbyEvent`.
-3. Criar `LobbyController`.
-4. Mover criação, entrada, saída e início para o controller.
-5. Deixar `LobbyPage` exclusivamente declarativa.
+Feito, em MVVM (`LobbyState` + `LobbyController`, sem `LobbyEvent`): a
+lobby tem poucas ações, todas locais, e não precisa de reducer.
 
 ### Fase 3 — separar infraestrutura
 
-1. Extrair signaling Firebase para `RoomSignalingService`.
-2. Extrair WebRTC para `PeerTransport`.
-3. Criar `RoomRepository` para compor os dois.
+1. ~~Extrair signaling Firebase~~ — feito em `RoomSignaling`.
+2. ~~Extrair WebRTC~~ — feito em `PeerLink`.
+3. Criar `RoomRepository` para compor os dois (hoje o `RoomService` faz esse papel).
 4. Manter regras de domínio fora dessas implementações.
 
 ### Fase 4 — robustez
@@ -639,7 +684,8 @@ Se estas respostas estiverem claras, a funcionalidade deve encaixar naturalmente
 
 ## Bússola: sensor e alinhamento
 
-O package `precise_compass` 0.2.0 requer Flutter >=3.44.0 e Dart >=3.12.0.
+O package `precise_compass` 0.2.0 requer Flutter >=3.44.0 e Dart >=3.12.0;
+o `pubspec.yaml` declara `sdk: ^3.12.0` para o erro ser explícito.
 
 `CompassService` encapsula o package `precise_compass` e publica amostras
 imutáveis com rumo magnético, precisão estimada e indicação de calibração.
