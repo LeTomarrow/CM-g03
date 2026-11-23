@@ -790,9 +790,17 @@ regras. Assim os puzzles não se decoram e o manual não vê a variante.
 | Desenho | símbolo + 4 fios em ordem aleatória (`drawingPuzzle`) | 9 símbolos em 3 famílias quase iguais, cada um com uma regra de fio (`WireRule`) |
 | Interruptores | 5 interruptores coloridos, para cima ou para baixo (`switchPuzzle`) | regras por cor, da esquerda para a direita, com exceção para cores seguidas (`solveSwitches`) |
 
-Ângulo e Bússola jogam-se da mesma forma (sequência, conta, orientar o
-telemóvel), por isso cada bomba tem só um deles, sorteado, mais os outros
-quatro módulos (`BombLoadout.generate`).
+| Sala de controlo (AR) | 8 painéis à volta, sobre a câmara, um com ALARME (`arPanelPuzzle`) | sentido pela luz do alarme, passos pela forma, +1 se a cor repetir (`solveArPanels`) |
+| Detetor (AR) | BASE, visor (símbolo + 2 números) e sinal que só apita perto (`arDetectorPuzzle`) | rumo pelo símbolo + 1.º número × 10°, altura pela paridade do 2.º (`solveArDetector`) |
+
+Cada bomba tem 5 módulos, para caber nos 5 minutos (`BombLoadout.generate`):
+
+- 1 módulo AR (Sala de controlo ou Detetor). Obrigam a andar à volta e são
+  os mais lentos, por isso nunca há dois;
+- 1 de Ângulo/Bússola, que se jogam da mesma forma (sequência, conta,
+  orientar o telemóvel). Fica separado do AR para não juntar módulos de
+  sensores no mesmo sorteio;
+- 3 dos 4 clássicos (Morse, Símbolos, Desenho, Interruptores).
 
 No Desenho, cada ponto do traço do operador desaparece 800 ms depois de ser
 desenhado, como um rasto atrás do dedo, mesmo sem o levantar
@@ -817,3 +825,57 @@ O operador envia `hack` com `{hack}`; o manual trava o ataque no terminal e
 responde com `{countered}`, que o operador só aceita se nomear o ataque ativo.
 Os dois veem um aviso enquanto o ataque dura. Os testes usam um
 `hackSchedulerProvider` com atrasos curtos.
+
+## Módulos AR
+
+AR "por sensores", sem ARCore/ARKit: a câmara traseira (`camera`) é o fundo e
+os objetos virtuais ficam presos a direções à volta do jogador.
+
+- `ArPoseService` calcula para onde aponta a câmara a partir do acelerómetro e
+  do magnetómetro (`arPoseFrom`): rumo e inclinação do eixo −z do telemóvel.
+  Não usa o rumo da bússola porque esse é o do topo do telemóvel, instável
+  com o telemóvel na vertical, que é como se joga AR. As leituras passam por
+  um filtro passa-baixo.
+- `ArView` torna o rumo relativo ao do momento em que o módulo abriu (a
+  BASE/painel 0 fica sempre à frente), projeta os objetos com um campo de
+  visão de 60° (`arProject`) e desenha uma linha do horizonte com marcas a
+  cada 15°, sem números.
+- Sem sensores (PC, web, testes) arrasta-se para olhar à volta; sem câmara
+  (ou sem permissão) o fundo é escuro. Assim o módulo joga-se e testa-se no
+  computador.
+- `onPose` é entregue fora do build: a leitura pode chegar enquanto a vista
+  constrói e o módulo faz `setState` com ela.
+
+Permissões: `CAMERA` no Android (com a câmara marcada como opcional) e
+`NSCameraUsageDescription` no iOS. Os testes estão em `test/ar_test.dart`.
+
+## Releases e atualização automática
+
+**CI** (`.github/workflows/release.yml`): cada push na `main` faz
+`pub get`, `analyze` e `test`. Se a versão do `pubspec.yaml` (`X.Y.Z`) ainda
+não tem tag `vX.Y.Z`, compila o APK assinado com a chave de release, verifica
+que não saiu com a chave de debug e publica o release `vX.Y.Z` com o APK.
+O número de build é o `run_number` do CI, por isso o `versionCode` cresce
+sempre. Para publicar: subir `version:` no `pubspec.yaml` e fazer merge na
+`main`.
+
+**Assinatura**: o Android só instala uma atualização assinada com a mesma
+chave. No CI a chave vem dos secrets `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` e `ANDROID_KEY_PASSWORD`;
+localmente pode vir de `android/key.properties` (ignorado pelo git). Sem
+nenhum dos dois, o release usa a chave de debug (só para desenvolvimento).
+Perder a chave obriga quem tem a app a desinstalá-la para voltar a atualizar.
+
+**App** (`UpdateService`, `UpdateController`):
+
+- ao abrir o menu, consulta `api.github.com/repos/LeTomarrow/CM-g03/releases/latest`
+  e, se houver uma versão maior, propõe atualizar;
+- em Definições → Sobre mostra a versão instalada (e o build) e permite
+  procurar e instalar atualizações;
+- a instalação (`ota_update`) descarrega o APK, valida o SHA-256 que o GitHub
+  publica e abre o instalador do Android, que pede confirmação (e, da
+  primeira vez, autorização para instalar apps desta origem).
+
+Limites: a app não tem token, por isso **o repositório tem de ser público**
+para os releases serem legíveis. No iOS uma app não se pode atualizar
+sozinha (só App Store/TestFlight): aí as definições mostram só a versão.

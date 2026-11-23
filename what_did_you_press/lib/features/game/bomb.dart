@@ -12,6 +12,8 @@ import 'package:what_did_you_press/features/game/modules/gyro_module.dart';
 import 'package:what_did_you_press/features/game/modules/morse_module.dart';
 import 'package:what_did_you_press/features/game/modules/symbols_module.dart';
 import 'package:what_did_you_press/features/game/modules/switches_module.dart';
+import 'package:what_did_you_press/features/game/modules/ar/ar_detector_module.dart';
+import 'package:what_did_you_press/features/game/modules/ar/ar_panels_module.dart';
 import 'package:what_did_you_press/features/game/result.dart';
 import 'package:what_did_you_press/features/game/game_controller.dart';
 import 'package:what_did_you_press/features/game/game_event.dart';
@@ -129,6 +131,8 @@ class _BombPageState extends ConsumerState<BombPage> {
       ModuleType.morse => MorseModulePage(variant: variant),
       ModuleType.symbols => SymbolsModulePage(variant: variant),
       ModuleType.switches => SwitchesModulePage(variant: variant),
+      ModuleType.arPanels => ArPanelsModulePage(variant: variant),
+      ModuleType.arDetector => ArDetectorModulePage(variant: variant),
       ModuleType.drawing => DrawingModulePage(
         variant: variant,
         onDrawingChanged: (strokes) =>

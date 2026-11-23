@@ -390,6 +390,114 @@ List<bool> solveSwitches(List<WireColor> colors, List<bool> initial) {
   return target;
 }
 
+// ── AR: SALA DE CONTROLO ────────────────────────────────────────────────────
+
+/// One virtual panel floating around the operator.
+class ArPanel {
+  const ArPanel(this.color, this.symbol, {required this.lit});
+
+  final WireColor color;
+  final String symbol;
+  final bool lit;
+}
+
+/// Panels sit in a circle around the operator, one every 45°, counted
+/// clockwise (to the right) from where the camera pointed when it opened.
+const int arPanelCount = 8;
+
+const Map<String, int> arPanelSteps = {
+  '★': 1,
+  '▲': 2,
+  '●': 3,
+  '■': 4,
+  '◆': 5,
+  '✚': 6,
+};
+
+const List<String> arPanelRules = [
+  'Os painéis estão em círculo à volta do operador. Começa no painel com o '
+      'ALARME.',
+  'Se a luz do alarme estiver ACESA, conta para a direita; se estiver '
+      'APAGADA, para a esquerda.',
+  'Conta tantos painéis quantos indica a forma do alarme: '
+      '★ 1 · ▲ 2 · ● 3 · ■ 4 · ◆ 5 · ✚ 6.',
+  'Se o painel onde paras tiver a mesma cor do alarme, avança mais um no '
+      'mesmo sentido.',
+  'O operador aponta a mira a esse painel e confirma.',
+];
+
+({List<ArPanel> panels, int alarm}) arPanelPuzzle(int variant) {
+  final random = Random(variant);
+  final panels = List.generate(
+    arPanelCount,
+    (_) => ArPanel(
+      WireColor.values[random.nextInt(WireColor.values.length)],
+      symbolPool[random.nextInt(symbolPool.length)],
+      lit: random.nextBool(),
+    ),
+  );
+  return (panels: panels, alarm: random.nextInt(arPanelCount));
+}
+
+/// Applies [arPanelRules] and returns the index of the panel to activate.
+int solveArPanels(List<ArPanel> panels, int alarm) {
+  final source = panels[alarm];
+  final direction = source.lit ? 1 : -1;
+  int at(int steps) =>
+      ((alarm + direction * steps) % panels.length + panels.length) %
+      panels.length;
+  var steps = arPanelSteps[source.symbol]!;
+  if (panels[at(steps)].color == source.color) steps++;
+  return at(steps);
+}
+
+// ── AR: DETETOR ─────────────────────────────────────────────────────────────
+
+/// Bearing to the right of the BASE marker for each visor symbol.
+const Map<String, int> arDetectorBearings = {
+  '▲': 45,
+  '●': 135,
+  '■': 225,
+  '◆': 315,
+};
+
+/// Elevation of the hidden part, above or below the horizon.
+const double arDetectorHigh = 25;
+const double arDetectorLow = -20;
+
+const List<String> arDetectorRules = [
+  'A BASE é o marco que estava à frente do operador quando o módulo abriu. '
+      'O visor dele mostra um símbolo e dois números.',
+  'Símbolo → rumo à direita da BASE: ▲ 45° · ● 135° · ■ 225° · ◆ 315°.',
+  'Soma o 1.º número × 10° a esse rumo (ex.: ● e 3 → 165°). Se passar de '
+      '360°, tira 360°.',
+  '2.º número PAR → a peça está acima do horizonte (olhar para cima); '
+      'ÍMPAR → abaixo (olhar para baixo).',
+  'Guia o operador. O detetor só apita perto da peça, e ele captura-a com a '
+      'mira em cima dela.',
+];
+
+({String symbol, int first, int second}) arDetectorPuzzle(int variant) {
+  final random = Random(variant);
+  final symbols = arDetectorBearings.keys.toList();
+  return (
+    symbol: symbols[random.nextInt(symbols.length)],
+    first: random.nextInt(10),
+    second: random.nextInt(10),
+  );
+}
+
+/// Where the part hides, relative to the BASE (degrees to the right, and
+/// degrees above the horizon).
+({double azimuth, double elevation}) solveArDetector(
+  String symbol,
+  int first,
+  int second,
+) => (
+  azimuth: ((arDetectorBearings[symbol]! + first * 10) % 360).toDouble(),
+  elevation: second.isEven ? arDetectorHigh : arDetectorLow,
+);
+
 // ── HACKERS ─────────────────────────────────────────────────────────────────
 
 /// Prefix of the blackout command; the password comes after it.

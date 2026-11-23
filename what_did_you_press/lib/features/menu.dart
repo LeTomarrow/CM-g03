@@ -11,6 +11,7 @@ import 'package:what_did_you_press/features/configs.dart';
 import 'package:what_did_you_press/features/help.dart';
 import 'package:what_did_you_press/features/lobby.dart';
 import 'package:what_did_you_press/features/world/world.dart';
+import 'package:what_did_you_press/features/update/update_ui.dart';
 
 /// The menu is the bomb's wiring: cut a wire to open that screen.
 class MenuPage extends StatelessWidget {
@@ -60,6 +61,9 @@ class _GamePageState extends State<GamePage> {
     super.initState();
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) checkForUpdateOnStart(context);
     });
   }
 

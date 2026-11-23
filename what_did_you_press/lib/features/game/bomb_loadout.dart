@@ -51,8 +51,11 @@ class BombModuleState {
 class BombLoadout {
   const BombLoadout({required this.seed, required this.modules});
 
-  /// Ângulo and Bússola play alike (a sequence, a sum, orient the phone), so
-  /// each bomb gets one of them plus every other module.
+  /// Five modules fit the five-minute timer:
+  /// - one AR module (they make the operator walk around, so they are slow);
+  /// - one of Ângulo/Bússola, which play alike (a sequence, a sum, orient
+  ///   the phone), kept apart from AR so sensor modules do not pile up;
+  /// - three of the four classic modules.
   /// [moduleCount] is smaller only in tests.
   static const int defaultModuleCount = 5;
 
@@ -61,13 +64,12 @@ class BombLoadout {
     int moduleCount = defaultModuleCount,
   }) {
     final random = Random(seed);
-    final orientation = random.nextBool()
-        ? ModuleType.gyro
-        : ModuleType.compass;
+    ModuleType pick(List<ModuleType> slot) => slot[random.nextInt(slot.length)];
+    final classics = [...ModuleType.classic]..shuffle(random);
     final types = [
-      for (final type in ModuleType.values)
-        if (type != ModuleType.gyro && type != ModuleType.compass) type,
-      orientation,
+      pick(ModuleType.augmented),
+      pick(ModuleType.orientation),
+      ...classics.take(3),
     ]..shuffle(random);
     assert(types.length == defaultModuleCount);
     final modules = List.generate(moduleCount, (index) {

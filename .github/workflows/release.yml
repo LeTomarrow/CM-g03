@@ -1,0 +1,103 @@
+# Builds and tests every push to main. When the version in pubspec.yaml has
+# no vX.Y.Z tag yet, it also publishes a GitHub release with the signed APK,
+# which the app finds and installs by itself (lib/services/update_service.dart).
+#
+# To publish: bump `version:` in what_did_you_press/pubspec.yaml and merge
+# into main. The build number comes from the run number, so it always grows.
+#
+# Required secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD. The app can only read releases
+# while the repository is public.
+name: Android release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: what_did_you_press
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags, to know whether this version is published
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(sed -nE 's/^version: *([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' pubspec.yaml)
+          test -n "$version" || { echo "::error::No X.Y.Z version in pubspec.yaml"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already published; bump the version to release."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decode keystore
+        if: steps.version.outputs.publish == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "::error::Missing ANDROID_KEYSTORE_BASE64 secret"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Build APK
+        if: steps.version.outputs.publish == 'true'
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build apk --release --build-number=${{ github.run_number }}
+
+      # Updates only install over an APK signed with the same key, so a
+      # debug-signed release would strand every player on the old version.
+      - name: Check the APK is release-signed
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          certs=$("$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk)
+          if echo "$certs" | grep -q "CN=Android Debug"; then
+            echo "::error::APK is signed with the debug key"; exit 1
+          fi
+
+      - name: Publish release
+        if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          apk="wdyp-v$VERSION.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$apk"
+          gh release create "v$VERSION" "$apk" \
+            --title "v$VERSION" \
+            --target "$GITHUB_SHA" \
+            --generate-notes

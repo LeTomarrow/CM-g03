@@ -480,6 +480,34 @@ class _ManualPageState extends ConsumerState<ManualPage> {
                       highlighted: activeType == ModuleType.symbols,
                     ),
                     _buildSection(
+                      ModuleType.arPanels.label,
+                      ModuleType.arPanels.color,
+                      [
+                        _buildText(
+                          'Módulo de realidade aumentada: o operador vê 8 '
+                          'painéis à volta dele, através da câmara.',
+                        ),
+                        for (int i = 0; i < arPanelRules.length; i++)
+                          _buildText('${i + 1}. ${arPanelRules[i]}'),
+                      ],
+                      key: _sectionKeys[ModuleType.arPanels],
+                      highlighted: activeType == ModuleType.arPanels,
+                    ),
+                    _buildSection(
+                      ModuleType.arDetector.label,
+                      ModuleType.arDetector.color,
+                      [
+                        _buildText(
+                          'Módulo de realidade aumentada: uma peça está '
+                          'escondida algures à volta do operador.',
+                        ),
+                        for (int i = 0; i < arDetectorRules.length; i++)
+                          _buildText('${i + 1}. ${arDetectorRules[i]}'),
+                      ],
+                      key: _sectionKeys[ModuleType.arDetector],
+                      highlighted: activeType == ModuleType.arDetector,
+                    ),
+                    _buildSection(
                       ModuleType.switches.label,
                       ModuleType.switches.color,
                       [

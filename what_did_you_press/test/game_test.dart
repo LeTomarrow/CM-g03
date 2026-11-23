@@ -173,20 +173,20 @@ void main() {
     }
   });
 
-  test('cada bomba tem Ângulo ou Bússola, nunca os dois', () {
-    final orientations = <ModuleType>{};
-    for (var seed = 0; seed < 100; seed++) {
+  test('cada bomba: 1 AR, Ângulo ou Bússola, e 3 clássicos', () {
+    final seen = <ModuleType>{};
+    for (var seed = 0; seed < 200; seed++) {
       final types = BombLoadout.generate(
         seed: seed,
       ).modules.map((module) => module.type).toList();
       expect(types, hasLength(BombLoadout.defaultModuleCount));
       expect(types.toSet(), hasLength(types.length));
-      expect(types, contains(ModuleType.switches));
-      final both = [ModuleType.gyro, ModuleType.compass];
-      expect(types.where(both.contains), hasLength(1));
-      orientations.addAll(types.where(both.contains));
+      expect(types.where(ModuleType.augmented.contains), hasLength(1));
+      expect(types.where(ModuleType.orientation.contains), hasLength(1));
+      expect(types.where(ModuleType.classic.contains), hasLength(3));
+      seen.addAll(types);
     }
-    expect(orientations, hasLength(2));
+    expect(seen, ModuleType.values.toSet());
   });
 
   test('cifra de César cifra, dá a volta ao Z e decifra', () {

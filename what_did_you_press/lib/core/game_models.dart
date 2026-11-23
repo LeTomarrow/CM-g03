@@ -19,7 +19,14 @@ enum ModuleType {
   morse('MORSE', Icons.vibration, AppColors.success),
   symbols('SÍMBOLOS', Icons.category, AppColors.danger),
   drawing('DESENHO', Icons.draw, AppColors.neonPurple),
-  switches('INTERRUPTORES', Icons.toggle_on, AppColors.copper);
+  switches('INTERRUPTORES', Icons.toggle_on, AppColors.copper),
+  arPanels('SALA DE CONTROLO', Icons.view_in_ar, AppColors.textPrimary),
+  arDetector('DETETOR', Icons.radar, AppColors.led);
+
+  /// Slots of a bomb (see `BombLoadout.generate`).
+  static const orientation = [gyro, compass];
+  static const augmented = [arPanels, arDetector];
+  static const classic = [morse, symbols, drawing, switches];
 
   const ModuleType(this.label, this.icon, this.color);
 
