@@ -1,0 +1,20 @@
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# Firebase CLI cache and local emulator exports
+.firebase/
+emulator-data/
+firebase-export-*/
+
+# Local environment overrides and credentials (client Firebase config is public)
+.env
+.env.*
+!.env.example
+.secret.local
+service-account*.json
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+*.keystore
+*.jks
+key.properties

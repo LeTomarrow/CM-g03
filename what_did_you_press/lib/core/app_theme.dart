@@ -1,34 +1,49 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// App color palette — dark military/bomb aesthetic.
+/// App color palette: an improvised device in an olive equipment case, with
+/// label-maker tape and an LED clock.
 class AppColors {
   AppColors._();
 
-  // Core
-  static const Color background = Color(0xFF0D0D0D);
-  static const Color surface = Color(0xFF1A1A2E);
-  static const Color surfaceLight = Color(0xFF16213E);
-  static const Color card = Color(0xFF1F1F38);
+  // Core: the painted casing.
+  static const Color background = Color(0xFF1B1E18);
+  static const Color surface = Color(0xFF252A21);
+  static const Color surfaceLight = Color(0xFF2F352A);
+  static const Color card = Color(0xFF2A2F25);
 
   // Accent
-  static const Color danger = Color(0xFFFF1744);
-  static const Color amber = Color(0xFFFFB300);
-  static const Color success = Color(0xFF00E676);
-  static const Color neonBlue = Color(0xFF00E5FF);
+  static const Color danger = Color(0xFFE2483D);
+  static const Color amber = Color(0xFFE9AE3B);
+  static const Color success = Color(0xFF6CC071);
+  static const Color neonBlue = Color(0xFF4AA3DF);
+  static const Color neonPurple = Color(0xFFB477D9);
 
   // Text
-  static const Color textPrimary = Color(0xFFE0E0E0);
-  static const Color textSecondary = Color(0xFF9E9E9E);
-  static const Color textDim = Color(0xFF616161);
+  static const Color textPrimary = Color(0xFFECE7D9);
+  static const Color textSecondary = Color(0xFFA7AB98);
+  static const Color textDim = Color(0xFF7A7F6F);
 
-  // Misc
-  static const Color metalGrey = Color(0xFF37474F);
-  static const Color wire = Color(0xFF455A64);
-  static const Color dangerGlow = Color(0x66FF1744);
-  static const Color amberGlow = Color(0x66FFB300);
-  static const Color successGlow = Color(0x6600E676);
+  // Hardware
+  static const Color metalGrey = Color(0xFF474E40);
+  static const Color wire = Color(0xFF5A6150);
+  static const Color tape = Color(0xFFECE7D9);
+  static const Color led = Color(0xFFFF4A3D);
+  static const Color copper = Color(0xFFD08A4E);
+  static const Color dangerGlow = Color(0x66E2483D);
+  static const Color amberGlow = Color(0x66E9AE3B);
+  static const Color successGlow = Color(0x666CC071);
+}
+
+/// The classic bomb wire colours.
+class WireColors {
+  WireColors._();
+
+  static const Color red = Color(0xFFC8332B);
+  static const Color blue = Color(0xFF2F62B0);
+  static const Color yellow = Color(0xFFE3B530);
+  static const Color white = Color(0xFFE6E2D6);
+  static const Color black = Color(0xFF0C0D0B);
 }
 
 /// App-wide theme configuration.
@@ -51,17 +66,14 @@ class AppTheme {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: _textTheme.titleLarge?.copyWith(
-          color: AppColors.danger,
-          letterSpacing: 3,
-        ),
+        foregroundColor: AppColors.danger,
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
       cardTheme: CardThemeData(
         color: AppColors.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(6),
           side: const BorderSide(color: AppColors.metalGrey, width: 1),
         ),
       ),
@@ -70,13 +82,11 @@ class AppTheme {
           backgroundColor: AppColors.danger,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          textStyle: GoogleFonts.shareTechMono(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          textStyle: GoogleFonts.barlowCondensed(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1,
           ),
         ),
       ),
@@ -85,13 +95,11 @@ class AppTheme {
           foregroundColor: AppColors.amber,
           side: const BorderSide(color: AppColors.amber, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          textStyle: GoogleFonts.shareTechMono(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          textStyle: GoogleFonts.barlowCondensed(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1,
           ),
         ),
       ),
@@ -99,15 +107,15 @@ class AppTheme {
         filled: true,
         fillColor: AppColors.surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(4),
           borderSide: const BorderSide(color: AppColors.metalGrey),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(4),
           borderSide: const BorderSide(color: AppColors.metalGrey),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(4),
           borderSide: const BorderSide(color: AppColors.amber, width: 2),
         ),
         labelStyle: const TextStyle(color: AppColors.textSecondary),
@@ -124,78 +132,75 @@ class AppTheme {
   }
 
   static TextTheme get _textTheme {
-    final mono = GoogleFonts.shareTechMono;
-    final display = GoogleFonts.orbitron;
+    // Condensed for headings and controls, like stencilled equipment labels;
+    // regular Barlow for anything read as sentences.
+    final condensed = GoogleFonts.barlowCondensed;
+    final body = GoogleFonts.barlow;
 
     return TextTheme(
-      displayLarge: display(
+      displayLarge: condensed(
         fontSize: 48,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w800,
         color: AppColors.danger,
-        letterSpacing: 4,
+        letterSpacing: 0.5,
       ),
-      displayMedium: display(
+      displayMedium: condensed(
         fontSize: 36,
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w800,
         color: AppColors.danger,
-        letterSpacing: 3,
+        letterSpacing: 0.5,
       ),
-      displaySmall: display(
+      displaySmall: condensed(
         fontSize: 28,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
-        letterSpacing: 2,
+        letterSpacing: 0.5,
       ),
-      headlineLarge: mono(
+      headlineLarge: condensed(
         fontSize: 24,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
-        letterSpacing: 2,
+        letterSpacing: 0.5,
       ),
-      headlineMedium: mono(
+      headlineMedium: condensed(
         fontSize: 20,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
         letterSpacing: 1.5,
       ),
-      headlineSmall: mono(
+      headlineSmall: condensed(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: AppColors.textPrimary,
       ),
-      titleLarge: mono(
+      titleLarge: condensed(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
-        letterSpacing: 2,
+        letterSpacing: 0.5,
       ),
-      titleMedium: mono(
+      titleMedium: condensed(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: AppColors.textPrimary,
       ),
-      titleSmall: mono(
+      titleSmall: condensed(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: AppColors.textSecondary,
       ),
-      bodyLarge: mono(
-        fontSize: 16,
-        color: AppColors.textPrimary,
-      ),
-      bodyMedium: mono(
+      bodyLarge: body(fontSize: 16, height: 1.45, color: AppColors.textPrimary),
+      bodyMedium: body(
         fontSize: 14,
+        height: 1.45,
         color: AppColors.textSecondary,
       ),
-      bodySmall: mono(
-        fontSize: 12,
-        color: AppColors.textDim,
-      ),
-      labelLarge: mono(
-        fontSize: 14,
-        fontWeight: FontWeight.bold,
+      bodySmall: body(fontSize: 13, color: AppColors.textDim),
+      labelLarge: condensed(
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
         color: AppColors.amber,
-        letterSpacing: 2,
+        letterSpacing: 1,
       ),
     );
   }
@@ -208,15 +213,9 @@ BoxDecoration glowingCardDecoration({
 }) {
   return BoxDecoration(
     color: AppColors.card,
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: BorderRadius.circular(6),
     border: Border.all(color: borderColor, width: 1),
-    boxShadow: [
-      BoxShadow(
-        color: glowColor,
-        blurRadius: 20,
-        spreadRadius: -5,
-      ),
-    ],
+    boxShadow: [BoxShadow(color: glowColor, blurRadius: 20, spreadRadius: -5)],
   );
 }
 

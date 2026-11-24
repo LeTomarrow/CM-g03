@@ -1,11 +1,11 @@
 {
-    "name": "what_did_you_press",
-    "short_name": "what_did_you_press",
+    "name": "WDYP: What did you press?!",
+    "short_name": "WDYP",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1B1E18",
+    "theme_color": "#1B1E18",
+    "description": "Um desarma a bomba, o outro lê o manual.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
