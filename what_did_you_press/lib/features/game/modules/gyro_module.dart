@@ -54,6 +54,13 @@ class GyroModulePage extends ConsumerWidget {
       subtitle: 'Roda o telemóvel até ao ângulo pedido pelo manual.',
       onConfirm: () => _confirm(context, sample),
       confirmEnabled: ready,
+      action: HoldToAlignButton(
+        color: AppColors.neonBlue,
+        aligning: alignment.isAligning,
+        reading: angle == null ? '—°' : '${angle.round() % 360}°',
+        onStart: controller.startAlignment,
+        onRelease: controller.lockAlignment,
+      ),
       children: [
         SequencePanel(sequence: _sequence.join(' '), color: AppColors.neonBlue),
         const SizedBox(height: 32),
@@ -67,32 +74,6 @@ class GyroModulePage extends ConsumerWidget {
             angle: angle ?? 0,
             labels: const ['0', '45', '90', '135', '180', '225', '270', '315'],
             color: AppColors.neonBlue,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          angle == null ? '—°' : '${angle.round() % 360}°',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.neonBlue, fontSize: 28),
-        ),
-        const SizedBox(height: 16),
-        GestureDetector(
-          onTapDown: (_) => controller.startAlignment(),
-          onTapUp: (_) => controller.lockAlignment(),
-          onTapCancel: controller.lockAlignment,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            alignment: Alignment.center,
-            decoration: glowingCardDecoration(
-              glowColor: AppColors.neonBlue.withValues(
-                alpha: alignment.isAligning ? 0.3 : 0.1,
-              ),
-              borderColor: AppColors.neonBlue,
-            ),
-            child: Text(
-              alignment.isAligning ? 'SOLTA PARA FIXAR' : 'MANTER PARA ALINHAR',
-              style: TextStyle(color: AppColors.neonBlue, fontSize: 18),
-            ),
           ),
         ),
         const SizedBox(height: 12),

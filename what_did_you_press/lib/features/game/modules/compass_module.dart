@@ -61,6 +61,13 @@ class CompassModulePage extends ConsumerWidget {
       subtitle: 'Usa a bússola e aponta para o ponto cardeal indicado.',
       onConfirm: () => _confirm(context, sample),
       confirmEnabled: ready,
+      action: HoldToAlignButton(
+        color: AppColors.amber,
+        aligning: alignment.isAligning,
+        reading: heading == null ? '—°' : '${(heading.round() % 360)}°',
+        onStart: controller.startAlignment,
+        onRelease: controller.lockAlignment,
+      ),
       children: [
         SequencePanel(sequence: _sequence.join(' '), color: AppColors.amber),
         const SizedBox(height: 32),
@@ -74,32 +81,6 @@ class CompassModulePage extends ConsumerWidget {
             angle: heading ?? 0,
             labels: cardinalAngles.keys.toList(),
             color: AppColors.amber,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          heading == null ? '—°' : '${(heading.round() % 360)}°',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.amber, fontSize: 28),
-        ),
-        const SizedBox(height: 16),
-        GestureDetector(
-          onTapDown: (_) => controller.startAlignment(),
-          onTapUp: (_) => controller.lockAlignment(),
-          onTapCancel: controller.lockAlignment,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            alignment: Alignment.center,
-            decoration: glowingCardDecoration(
-              glowColor: AppColors.amber.withValues(
-                alpha: alignment.isAligning ? 0.3 : 0.1,
-              ),
-              borderColor: AppColors.amber,
-            ),
-            child: Text(
-              alignment.isAligning ? 'SOLTA PARA FIXAR' : 'MANTER PARA ALINHAR',
-              style: TextStyle(color: AppColors.amber, fontSize: 18),
-            ),
           ),
         ),
         const SizedBox(height: 12),

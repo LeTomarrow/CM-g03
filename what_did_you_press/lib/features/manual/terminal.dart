@@ -30,18 +30,26 @@ class _TerminalPageState extends State<TerminalPage> {
   @override
   void initState() {
     super.initState();
-    // During a blackout the manual is hidden, so the terminal itself
-    // hands out the (encrypted) puzzle.
-    if (widget.activeHack == HackType.lights) _lines.addAll(_blackoutInfo());
+    // Under attack the manual is blurred or dark, so the terminal itself
+    // explains how to counter it.
+    if (widget.activeHack != null) _lines.addAll(_analysis());
   }
 
-  List<String> _blackoutInfo() {
-    return [
-      'ALERTA: corte de energia.',
-      'Senha intercetada: ${caesarShift(_password, _shift)}',
-      'Cifra de César, desvio +$_shift.',
-      'Repor: $restoreCommand <senha>',
-    ];
+  List<String> _analysis() {
+    return switch (widget.activeHack) {
+      null => ['Sistema limpo.'],
+      HackType.lights => [
+        'ALERTA: corte de energia.',
+        'Senha intercetada: ${caesarShift(_password, _shift)}',
+        'Cifra de César, desvio +$_shift: recua cada letra $_shift '
+            'posições no alfabeto (ex.: desvio +2, D → B).',
+        'Repor: $restoreCommand <senha>',
+      ],
+      final hack => [
+        'ALERTA: ${hack.symptom.toLowerCase()}.',
+        'Contramedida: ${hack.command}',
+      ],
+    };
   }
 
   @override
@@ -53,16 +61,12 @@ class _TerminalPageState extends State<TerminalPage> {
 
   List<String> _execute(String command) {
     if (command == 'ajuda') {
-      return ['analisar   procura intrusões', 'sair       volta ao manual'];
-    }
-    if (command == 'analisar') {
-      if (widget.activeHack == HackType.lights) return _blackoutInfo();
       return [
-        widget.activeHack == null
-            ? 'Sistema limpo.'
-            : 'ALERTA: intrusão ativa. Consulta o manual.',
+        'analisar   procura intrusões e diz como as travar',
+        'sair       volta ao manual',
       ];
     }
+    if (command == 'analisar') return _analysis();
 
     // Checked before the generic match so "<senha>" typed literally fails.
     if (command.startsWith(restoreCommand)) {

@@ -229,9 +229,19 @@ class _ManualPageState extends ConsumerState<ManualPage> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'ATAQUE HACKER — ${hack.symptom}. Trava-o no terminal.',
+              'ATAQUE HACKER — ${hack.symptom}. Abre o terminal: ele diz '
+              'como o travar.',
               style: TextStyle(color: Colors.white),
             ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: _openTerminal,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              backgroundColor: Colors.white,
+            ),
+            child: const Text('TERMINAL'),
           ),
         ],
       ),
@@ -313,7 +323,8 @@ class _ManualPageState extends ConsumerState<ManualPage> {
           Text('SEM LUZ', style: TextStyle(color: AppColors.textDim)),
           const SizedBox(height: 8),
           Text(
-            'Os hackers cortaram a energia. Usa o terminal para a repor.',
+            'Os hackers cortaram a energia. Abre o terminal: ele mostra a '
+            'senha cifrada e como a decifrar.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textDim, height: 1.5),
           ),
@@ -398,183 +409,196 @@ class _ManualPageState extends ConsumerState<ManualPage> {
           ],
         ),
         body: SafeArea(
-          child: Stack(
+          child: Column(
             children: [
-              HackShake(
-                active: visibleHack == HackType.vibration,
-                child: ListView(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(24.0),
+              // Outside the shake, so it stays readable during the attack.
+              if (visibleHack != null && visibleHack != HackType.lights)
+                _buildHackBanner(visibleHack),
+              Expanded(
+                child: Stack(
                   children: [
-                    if (widget.transport != null) _buildBombStatus(),
-                    if (visibleHack != null) ...[
-                      _buildHackBanner(visibleHack),
-                      const SizedBox(height: 24),
-                    ],
-                    _buildSection(
-                      ModuleType.gyro.label,
-                      ModuleType.gyro.color,
-                      [
-                        _buildText(
-                          'Com o telemóvel na vertical, roda-o até ao ângulo indicado.',
-                        ),
-                        _buildText(
-                          'Pede ao operador os quatro símbolos, da esquerda '
-                          'para a direita, e calcula o ângulo:',
-                        ),
-                        for (int i = 0; i < angleRules.length; i++)
-                          _buildText('${i + 1}. ${angleRules[i]}'),
-                      ],
-                      key: _sectionKeys[ModuleType.gyro],
-                      highlighted: activeType == ModuleType.gyro,
-                    ),
-                    _buildSection(
-                      ModuleType.compass.label,
-                      ModuleType.compass.color,
-                      [
-                        _buildText(
-                          'Pede ao operador os quatro números e descobre para '
-                          'que ponto cardeal deve virar o telemóvel:',
-                        ),
-                        for (int i = 0; i < compassRules.length; i++)
-                          _buildText('${i + 1}. ${compassRules[i]}'),
-                      ],
-                      key: _sectionKeys[ModuleType.compass],
-                      highlighted: activeType == ModuleType.compass,
-                    ),
-                    _buildSection(
-                      ModuleType.morse.label,
-                      ModuleType.morse.color,
-                      [
-                        _buildText(
-                          'Descodifica a palavra e indica a frequência.',
-                        ),
-                        for (final entry in morseFrequencies.entries)
-                          _buildRow(entry.key, entry.value),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 4,
-                          children: [
-                            for (final entry in morseCode.entries)
+                    HackShake(
+                      active: visibleHack == HackType.vibration,
+                      child: ListView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(24.0),
+                        children: [
+                          if (widget.transport != null) _buildBombStatus(),
+                          _buildSection(
+                            ModuleType.gyro.label,
+                            ModuleType.gyro.color,
+                            [
+                              _buildText(
+                                'Com o telemóvel na vertical, roda-o até ao ângulo indicado.',
+                              ),
+                              _buildText(
+                                'Pede ao operador os quatro símbolos, da esquerda '
+                                'para a direita, e calcula o ângulo:',
+                              ),
+                              for (int i = 0; i < angleRules.length; i++)
+                                _buildText('${i + 1}. ${angleRules[i]}'),
+                            ],
+                            key: _sectionKeys[ModuleType.gyro],
+                            highlighted: activeType == ModuleType.gyro,
+                          ),
+                          _buildSection(
+                            ModuleType.compass.label,
+                            ModuleType.compass.color,
+                            [
+                              _buildText(
+                                'Pede ao operador os quatro números e descobre para '
+                                'que ponto cardeal deve virar o telemóvel:',
+                              ),
+                              for (int i = 0; i < compassRules.length; i++)
+                                _buildText('${i + 1}. ${compassRules[i]}'),
+                            ],
+                            key: _sectionKeys[ModuleType.compass],
+                            highlighted: activeType == ModuleType.compass,
+                          ),
+                          _buildSection(
+                            ModuleType.morse.label,
+                            ModuleType.morse.color,
+                            [
+                              _buildText(
+                                'Descodifica a palavra e indica a frequência.',
+                              ),
+                              for (final entry in morseFrequencies.entries)
+                                _buildRow(entry.key, entry.value),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 16,
+                                runSpacing: 4,
+                                children: [
+                                  for (final entry in morseCode.entries)
+                                    Text(
+                                      '${entry.key} ${entry.value}',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                            key: _sectionKeys[ModuleType.morse],
+                            highlighted: activeType == ModuleType.morse,
+                          ),
+                          _buildSection(
+                            ModuleType.symbols.label,
+                            ModuleType.symbols.color,
+                            [
+                              for (int i = 0; i < symbolRules.length; i++)
+                                _buildText('${i + 1}. ${symbolRules[i]}'),
+                            ],
+                            key: _sectionKeys[ModuleType.symbols],
+                            highlighted: activeType == ModuleType.symbols,
+                          ),
+                          _buildSection(
+                            ModuleType.arPanels.label,
+                            ModuleType.arPanels.color,
+                            [
+                              _buildText(
+                                'Módulo de realidade aumentada: o operador vê 8 '
+                                'painéis à volta dele, através da câmara.',
+                              ),
+                              for (int i = 0; i < arPanelRules.length; i++)
+                                _buildText('${i + 1}. ${arPanelRules[i]}'),
+                            ],
+                            key: _sectionKeys[ModuleType.arPanels],
+                            highlighted: activeType == ModuleType.arPanels,
+                          ),
+                          _buildSection(
+                            ModuleType.arDetector.label,
+                            ModuleType.arDetector.color,
+                            [
+                              _buildText(
+                                'Módulo de realidade aumentada: uma peça está '
+                                'escondida algures à volta do operador.',
+                              ),
+                              for (int i = 0; i < arDetectorRules.length; i++)
+                                _buildText('${i + 1}. ${arDetectorRules[i]}'),
+                            ],
+                            key: _sectionKeys[ModuleType.arDetector],
+                            highlighted: activeType == ModuleType.arDetector,
+                          ),
+                          _buildSection(
+                            ModuleType.switches.label,
+                            ModuleType.switches.color,
+                            [
+                              _buildText(
+                                'Pede ao operador a cor e a posição inicial de cada '
+                                'interruptor, da esquerda para a direita.',
+                              ),
+                              for (int i = 0; i < switchRules.length; i++)
+                                _buildText(
+                                  i == 0
+                                      ? switchRules[i]
+                                      : '$i. ${switchRules[i]}',
+                                ),
+                            ],
+                            key: _sectionKeys[ModuleType.switches],
+                            highlighted: activeType == ModuleType.switches,
+                          ),
+                          _buildSection(
+                            ModuleType.drawing.label,
+                            ModuleType.drawing.color,
+                            [
+                              _buildText(
+                                'O operador desenha o símbolo que vê, mas não vê o '
+                                'próprio traço. Encontra-o abaixo — os símbolos de '
+                                'cada família só diferem num pormenor — e diz-lhe que '
+                                'fio cortar. Os fios dele estão por uma ordem '
+                                'aleatória: pede-lha quando a regra depende da posição.',
+                              ),
+                              _buildText(wireRulesNote),
+                              const SizedBox(height: 12),
                               Text(
-                                '${entry.key} ${entry.value}',
+                                'DESENHO DO OPERADOR (EM DIRETO)',
                                 style: TextStyle(
                                   color: AppColors.textSecondary,
                                 ),
                               ),
-                          ],
-                        ),
-                      ],
-                      key: _sectionKeys[ModuleType.morse],
-                      highlighted: activeType == ModuleType.morse,
-                    ),
-                    _buildSection(
-                      ModuleType.symbols.label,
-                      ModuleType.symbols.color,
-                      [
-                        for (int i = 0; i < symbolRules.length; i++)
-                          _buildText('${i + 1}. ${symbolRules[i]}'),
-                      ],
-                      key: _sectionKeys[ModuleType.symbols],
-                      highlighted: activeType == ModuleType.symbols,
-                    ),
-                    _buildSection(
-                      ModuleType.arPanels.label,
-                      ModuleType.arPanels.color,
-                      [
-                        _buildText(
-                          'Módulo de realidade aumentada: o operador vê 8 '
-                          'painéis à volta dele, através da câmara.',
-                        ),
-                        for (int i = 0; i < arPanelRules.length; i++)
-                          _buildText('${i + 1}. ${arPanelRules[i]}'),
-                      ],
-                      key: _sectionKeys[ModuleType.arPanels],
-                      highlighted: activeType == ModuleType.arPanels,
-                    ),
-                    _buildSection(
-                      ModuleType.arDetector.label,
-                      ModuleType.arDetector.color,
-                      [
-                        _buildText(
-                          'Módulo de realidade aumentada: uma peça está '
-                          'escondida algures à volta do operador.',
-                        ),
-                        for (int i = 0; i < arDetectorRules.length; i++)
-                          _buildText('${i + 1}. ${arDetectorRules[i]}'),
-                      ],
-                      key: _sectionKeys[ModuleType.arDetector],
-                      highlighted: activeType == ModuleType.arDetector,
-                    ),
-                    _buildSection(
-                      ModuleType.switches.label,
-                      ModuleType.switches.color,
-                      [
-                        _buildText(
-                          'Pede ao operador a cor e a posição inicial de cada '
-                          'interruptor, da esquerda para a direita.',
-                        ),
-                        for (int i = 0; i < switchRules.length; i++)
-                          _buildText(
-                            i == 0 ? switchRules[i] : '$i. ${switchRules[i]}',
+                              const SizedBox(height: 8),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  border: Border.all(
+                                    color: AppColors.metalGrey,
+                                  ),
+                                ),
+                                child: ValueListenableBuilder<List<Stroke>>(
+                                  valueListenable: liveDrawing,
+                                  builder: (context, strokes, _) => DrawingView(
+                                    strokes: strokes,
+                                    color: AppColors.neonPurple,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              for (final glyph in glyphs) _buildGlyph(glyph),
+                            ],
+                            key: _sectionKeys[ModuleType.drawing],
+                            highlighted: activeType == ModuleType.drawing,
                           ),
-                      ],
-                      key: _sectionKeys[ModuleType.switches],
-                      highlighted: activeType == ModuleType.switches,
-                    ),
-                    _buildSection(
-                      ModuleType.drawing.label,
-                      ModuleType.drawing.color,
-                      [
-                        _buildText(
-                          'O operador desenha o símbolo que vê, mas não vê o '
-                          'próprio traço. Encontra-o abaixo — os símbolos de '
-                          'cada família só diferem num pormenor — e diz-lhe que '
-                          'fio cortar. Os fios dele estão por uma ordem '
-                          'aleatória: pede-lha quando a regra depende da posição.',
-                        ),
-                        _buildText(wireRulesNote),
-                        const SizedBox(height: 12),
-                        Text(
-                          'DESENHO DO OPERADOR (EM DIRETO)',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            border: Border.all(color: AppColors.metalGrey),
-                          ),
-                          child: ValueListenableBuilder<List<Stroke>>(
-                            valueListenable: liveDrawing,
-                            builder: (context, strokes, _) => DrawingView(
-                              strokes: strokes,
-                              color: AppColors.neonPurple,
+                          _buildSection('HACKERS', AppColors.textPrimary, [
+                            for (final type in HackType.values)
+                              _buildRow(type.symptom, type.command),
+                            const SizedBox(height: 12),
+                            _buildText(
+                              'Durante um ataque abre o terminal (ícone no topo) e '
+                              'escreve "analisar": diz-te o ataque e o comando que '
+                              'o trava. No apagão mostra a senha cifrada: recua '
+                              'cada letra o número de posições do desvio (ex.: '
+                              'desvio +2, D → B).',
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        for (final glyph in glyphs) _buildGlyph(glyph),
-                      ],
-                      key: _sectionKeys[ModuleType.drawing],
-                      highlighted: activeType == ModuleType.drawing,
-                    ),
-                    _buildSection('HACKERS', AppColors.textPrimary, [
-                      for (final type in HackType.values)
-                        _buildRow(type.symptom, type.command),
-                      const SizedBox(height: 12),
-                      _buildText(
-                        'Às escuras não vais conseguir ler isto: o terminal '
-                        'mostra a senha cifrada. Recua cada letra o número de '
-                        'posições do desvio (ex.: desvio +2, D → B).',
+                          ]),
+                        ],
                       ),
-                    ]),
+                    ),
+                    if (visibleHack == HackType.lights)
+                      Positioned.fill(child: _buildBlackout()),
                   ],
                 ),
               ),
-              if (visibleHack == HackType.lights)
-                Positioned.fill(child: _buildBlackout()),
             ],
           ),
         ),

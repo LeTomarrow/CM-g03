@@ -7,37 +7,50 @@ class MenuButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.color = AppColors.danger,
+    this.enabled = true,
   });
 
   final String label;
   final void Function() onPressed;
   final Color color;
 
+  /// A disabled key sits flat and grey and ignores taps.
+  final bool enabled;
+
   /// A chunky hardware key: its darker lower edge reads as depth.
   @override
   Widget build(BuildContext context) {
+    final face = enabled ? color : AppColors.surfaceLight;
     final light =
-        ThemeData.estimateBrightnessForColor(color) == Brightness.light;
-    final edge = Color.lerp(color, Colors.black, 0.45)!;
+        ThemeData.estimateBrightnessForColor(face) == Brightness.light;
+    final edge = Color.lerp(face, Colors.black, 0.45)!;
     return SizedBox(
       width: double.infinity,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
+          onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(4),
           child: Ink(
-            padding: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
             decoration: BoxDecoration(
-              color: color,
+              color: face,
               borderRadius: BorderRadius.circular(4),
-              boxShadow: [BoxShadow(color: edge, offset: const Offset(0, 4))],
+              boxShadow: enabled
+                  ? [BoxShadow(color: edge, offset: const Offset(0, 4))]
+                  : null,
             ),
             child: Text(
               label,
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: light ? AppColors.background : AppColors.textPrimary,
+                color: !enabled
+                    ? AppColors.textSecondary
+                    : light
+                    ? AppColors.background
+                    : AppColors.textPrimary,
               ),
             ),
           ),

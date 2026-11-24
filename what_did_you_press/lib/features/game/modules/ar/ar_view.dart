@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -33,22 +35,49 @@ class ArObject {
   final double size;
 }
 
-/// Screen position of a direction for a camera looking at [view], or null
-/// when it is outside the field of view.
+/// Focal length, in logical pixels, that makes [size] span [fov] degrees
+/// horizontally.
+double arFocalLength(Size size, {double fov = ArView.horizontalFov}) =>
+    size.width / 2 / math.tan(fov / 2 * math.pi / 180);
+
+/// Focal length of the camera feed as [ArCameraBackground] draws it: the
+/// landscape [preview] is turned portrait and cover-fitted into [size].
+/// Phone previews crop the short side of the sensor, so the long side keeps
+/// about [ArView.cameraLongSideFov].
+double arCameraFocalLength(Size size, Size? preview) {
+  if (preview == null || preview.isEmpty) return arFocalLength(size);
+  final long = math.max(preview.width, preview.height);
+  final short = math.min(preview.width, preview.height);
+  final scale = math.max(size.width / short, size.height / long);
+  final focal =
+      long / 2 / math.tan(ArView.cameraLongSideFov / 2 * math.pi / 180);
+  return focal * scale;
+}
+
+/// Screen position of a direction for a pinhole camera looking at [view]
+/// with focal length [focal] (default: [ArView.horizontalFov] across), or
+/// null when it is behind or far outside the view.
 Offset? arProject({
   required double azimuth,
   required double elevation,
   required ArPose view,
   required Size size,
-  double fov = ArView.horizontalFov,
+  double? focal,
 }) {
-  final dx = angleDelta(azimuth, view.yaw);
-  if (dx.abs() > fov) return null;
-  final verticalFov = fov * size.height / size.width;
-  return Offset(
-    size.width / 2 + dx / fov * size.width,
-    size.height / 2 - (elevation - view.pitch) / verticalFov * size.height,
-  );
+  const rad = math.pi / 180;
+  final f = focal ?? arFocalLength(size);
+  final dAz = angleDelta(azimuth, view.yaw) * rad;
+  final el = elevation * rad;
+  final pitch = view.pitch * rad;
+  // Direction in a frame turned to the camera's bearing: right, ahead, up.
+  final right = math.cos(el) * math.sin(dAz);
+  final ahead = math.cos(el) * math.cos(dAz);
+  final up = math.sin(el);
+  // Tilt by the camera's pitch.
+  final z = ahead * math.cos(pitch) + up * math.sin(pitch);
+  final y = up * math.cos(pitch) - ahead * math.sin(pitch);
+  if (z < 0.2) return null;
+  return Offset(size.width / 2 + f * right / z, size.height / 2 - f * y / z);
 }
 
 /// Camera feed with virtual objects anchored around the player. Without
@@ -62,8 +91,11 @@ class ArView extends ConsumerStatefulWidget {
     this.height = 420,
   });
 
-  /// Horizontal field of view used to place objects, in degrees.
+  /// Horizontal field of view without a camera feed, in degrees.
   static const double horizontalFov = 60;
+
+  /// Field of view along the long side of a typical phone camera preview.
+  static const double cameraLongSideFov = 66;
 
   final List<ArObject> Function(ArPose pose) objects;
   final Widget Function(ArPose pose)? hud;
@@ -79,6 +111,7 @@ class ArView extends ConsumerStatefulWidget {
 class _ArViewState extends ConsumerState<ArView> {
   double? _startYaw;
   ArPose _dragPose = const ArPose(yaw: 0, pitch: 0);
+  Size? _previewSize;
 
   ArPose? _relative(ArPose? sensor) {
     if (sensor == null || !sensor.isAvailable) return null;
@@ -129,14 +162,20 @@ class _ArViewState extends ConsumerState<ArView> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final size = constraints.biggest;
+            final focal = arCameraFocalLength(size, _previewSize);
             return GestureDetector(
               dragStartBehavior: DragStartBehavior.down,
               onPanUpdate: sensorPose == null ? _drag : null,
               child: Stack(
                 children: [
-                  const Positioned.fill(child: ArCameraBackground()),
                   Positioned.fill(
-                    child: CustomPaint(painter: _HorizonPainter(pose)),
+                    child: ArCameraBackground(
+                      onPreviewSize: (preview) =>
+                          setState(() => _previewSize = preview),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: CustomPaint(painter: _HorizonPainter(pose, focal)),
                   ),
                   for (final object in widget.objects(pose))
                     if (arProject(
@@ -144,6 +183,7 @@ class _ArViewState extends ConsumerState<ArView> {
                           elevation: object.elevation,
                           view: pose,
                           size: size,
+                          focal: focal,
                         )
                         case final point?)
                       Positioned(
@@ -206,23 +246,25 @@ class _Crosshair extends StatelessWidget {
 /// Horizon line with a tick every 15° (longer every 45°), unnumbered, so
 /// the operator can count turns without reading exact bearings.
 class _HorizonPainter extends CustomPainter {
-  _HorizonPainter(this.pose);
+  _HorizonPainter(this.pose, this.focal);
 
   final ArPose pose;
+  final double focal;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = AppColors.textPrimary.withValues(alpha: 0.45)
       ..strokeWidth = 1.5;
-    final left = arProject(
-      azimuth: pose.yaw - ArView.horizontalFov,
+    final ahead = arProject(
+      azimuth: pose.yaw,
       elevation: 0,
       view: pose,
       size: size,
+      focal: focal,
     );
-    if (left == null) return;
-    final y = left.dy;
+    if (ahead == null) return;
+    final y = ahead.dy;
     canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     for (var azimuth = 0; azimuth < 360; azimuth += 15) {
       final point = arProject(
@@ -230,6 +272,7 @@ class _HorizonPainter extends CustomPainter {
         elevation: 0,
         view: pose,
         size: size,
+        focal: focal,
       );
       if (point == null) continue;
       final half = azimuth % 45 == 0 ? 10.0 : 5.0;
@@ -243,13 +286,19 @@ class _HorizonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_HorizonPainter old) =>
-      old.pose.yaw != pose.yaw || old.pose.pitch != pose.pitch;
+      old.pose.yaw != pose.yaw ||
+      old.pose.pitch != pose.pitch ||
+      old.focal != focal;
 }
 
 /// The back camera, or a dark backdrop where there is none (desktop, web,
 /// tests, permission denied).
 class ArCameraBackground extends StatefulWidget {
-  const ArCameraBackground({super.key});
+  const ArCameraBackground({super.key, this.onPreviewSize});
+
+  /// The feed's (landscape) size once the camera is open, to match the
+  /// virtual field of view to it.
+  final ValueChanged<Size>? onPreviewSize;
 
   @override
   State<ArCameraBackground> createState() => _ArCameraBackgroundState();
@@ -287,6 +336,8 @@ class _ArCameraBackgroundState extends State<ArCameraBackground> {
         return;
       }
       setState(() => _controller = controller);
+      final preview = controller.value.previewSize;
+      if (preview != null) widget.onPreviewSize?.call(preview);
     } catch (_) {
       // No camera or no permission: the backdrop stays.
     }

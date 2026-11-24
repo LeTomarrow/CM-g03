@@ -61,6 +61,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
     readings.add(const TiltSample(angle: 45));
     await tester.pump();
+    await tester.pump();
     expect(find.text('45°'), findsOneWidget);
     expect(confirmEnabled(), isFalse);
 

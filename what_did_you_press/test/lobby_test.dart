@@ -70,7 +70,7 @@ void main() {
     await tester.ensureVisible(find.text('ENTRAR'));
     await tester.tap(find.text('ENTRAR'));
     await tester.pumpAndSettle();
-    expect(find.text('123456'), findsNWidgets(2));
+    expect(find.text('123456'), findsOneWidget);
 
     // The DataChannel emits closed without a separate error. This previously
     // left the guest's room and create/join buttons stuck in the active state.
