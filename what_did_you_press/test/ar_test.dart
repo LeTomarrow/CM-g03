@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,6 +49,40 @@ void main() {
         arPoseFrom((x: 0, y: 0, z: 0), (x: 1, y: 1, z: 1)).isAvailable,
         isFalse,
       );
+    });
+  });
+
+  group('gyroscope bearing', () {
+    test('turning right while upright raises the yaw', () {
+      // Upright: up is +y. Turning right is a negative rotation about +y.
+      expect(
+        yawRateFrom((x: 0, y: -1, z: 0), (x: 0, y: 9.8, z: 0)),
+        closeTo(57.2958, 0.01),
+      );
+    });
+
+    test('rotation about the camera axis is not a turn', () {
+      expect(yawRateFrom((x: 0, y: 0, z: 1), (x: 0, y: 9.8, z: 0)), 0);
+    });
+
+    test('pitch comes from gravity alone', () {
+      expect(pitchFrom((x: 0, y: 9.8 * 0.8660254, z: -4.9)), closeTo(30, 0.01));
+    });
+  });
+
+  group('camera field of view', () {
+    test('matches the feed: portrait shows the short side', () {
+      const box = Size(360, 420);
+      final focal = arCameraFocalLength(box, const Size(720, 480));
+      // Half the width at the virtual focal length spans less than 30°.
+      final halfFov = math.atan(180 / focal) * 180 / math.pi;
+      expect(halfFov, lessThan(27));
+      expect(halfFov, greaterThan(20));
+    });
+
+    test('without a feed falls back to the default field of view', () {
+      const box = Size(300, 360);
+      expect(arCameraFocalLength(box, null), arFocalLength(box));
     });
   });
 

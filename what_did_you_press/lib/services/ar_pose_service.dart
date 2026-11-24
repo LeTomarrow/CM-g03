@@ -52,7 +52,34 @@ ArPose arPoseFrom(Vector3 accel, Vector3 magnetic) {
   return ArPose(yaw: (yaw + 360) % 360, pitch: pitch);
 }
 
-/// Owns the sensors; cancelling the stream releases both listeners.
+/// Clockwise turn rate of the camera about the world vertical, in degrees
+/// per second, from the gyroscope ([gyro], rad/s, right-handed device axes)
+/// and gravity ([accel], device "up").
+double yawRateFrom(Vector3 gyro, Vector3 accel) {
+  final l = math.sqrt(
+    accel.x * accel.x + accel.y * accel.y + accel.z * accel.z,
+  );
+  if (l < 1e-3) return 0;
+  // Counter-clockwise about "up" is positive, so turning right is negative.
+  final rate = (gyro.x * accel.x + gyro.y * accel.y + gyro.z * accel.z) / l;
+  return -rate * 180 / math.pi;
+}
+
+/// Pitch of the camera axis (device −z) above the horizon, from gravity.
+double pitchFrom(Vector3 accel) {
+  final l = math.sqrt(
+    accel.x * accel.x + accel.y * accel.y + accel.z * accel.z,
+  );
+  if (l < 1e-3) return double.nan;
+  return math.asin((-accel.z / l).clamp(-1.0, 1.0)) * 180 / math.pi;
+}
+
+/// Owns the sensors; cancelling the stream releases every listener.
+///
+/// The bearing comes from the gyroscope: indoors the magnetometer is bent by
+/// walls and appliances, so a real 90° turn can read 60° and virtual objects
+/// would drift along with the camera. The magnetometer only seeds the
+/// bearing, and stands in when the phone has no gyroscope.
 class ArPoseService {
   /// Low-pass weight of each reading; lower is steadier but laggier.
   static const double smoothing = 0.15;
@@ -66,8 +93,11 @@ class ArPoseService {
     late final StreamController<ArPose> controller;
     StreamSubscription<AccelerometerEvent>? accelSub;
     StreamSubscription<MagnetometerEvent>? magSub;
+    StreamSubscription<GyroscopeEvent>? gyroSub;
     Vector3? accel;
     Vector3? magnetic;
+    double? gyroYaw;
+    final clock = Stopwatch();
 
     Vector3 filter(Vector3? old, double x, double y, double z) => old == null
         ? (x: x, y: y, z: z)
@@ -77,10 +107,33 @@ class ArPoseService {
             z: old.z + smoothing * (z - old.z),
           );
 
+    double? magneticYaw() {
+      if (accel == null || magnetic == null) return null;
+      final pose = arPoseFrom(accel!, magnetic!);
+      return pose.isAvailable ? pose.yaw : null;
+    }
+
     void emit() {
-      if (accel != null && magnetic != null) {
-        controller.add(arPoseFrom(accel!, magnetic!));
+      if (accel == null) return;
+      final yaw = gyroYaw ?? magneticYaw();
+      if (yaw == null) return;
+      controller.add(ArPose(yaw: yaw, pitch: pitchFrom(accel!)));
+    }
+
+    void onGyro(GyroscopeEvent e) {
+      final up = accel;
+      if (up == null) return;
+      if (gyroYaw == null) {
+        gyroYaw = magneticYaw() ?? 0;
+        clock.start();
+        return;
       }
+      // Clamp the step so a stalled stream cannot jump the view.
+      final dt = math.min(clock.elapsedMicroseconds / 1e6, 0.1);
+      clock.reset();
+      final rate = yawRateFrom((x: e.x, y: e.y, z: e.z), up);
+      gyroYaw = (gyroYaw! + rate * dt + 360) % 360;
+      emit();
     }
 
     controller = StreamController<ArPose>(
@@ -88,16 +141,20 @@ class ArPoseService {
         const period = SensorInterval.gameInterval;
         accelSub = accelerometerEventStream(samplingPeriod: period).listen((e) {
           accel = filter(accel, e.x, e.y, e.z);
-          emit();
+          if (gyroYaw == null) emit();
         }, onError: (Object _) => controller.add(ArPose.unavailable));
         magSub = magnetometerEventStream(samplingPeriod: period).listen(
           (e) => magnetic = filter(magnetic, e.x, e.y, e.z),
-          onError: (Object _) => controller.add(ArPose.unavailable),
+          onError: (Object _) {},
         );
+        gyroSub = gyroscopeEventStream(
+          samplingPeriod: period,
+        ).listen(onGyro, onError: (Object _) => gyroYaw = null);
       },
       onCancel: () async {
         await accelSub?.cancel();
         await magSub?.cancel();
+        await gyroSub?.cancel();
       },
     );
     return controller.stream;

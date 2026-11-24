@@ -20,6 +20,7 @@ class ModuleFrame extends StatelessWidget {
     required this.children,
     this.subtitle,
     this.confirmEnabled = true,
+    this.action,
   });
 
   final ModuleType type;
@@ -27,6 +28,10 @@ class ModuleFrame extends StatelessWidget {
   final List<Widget> children;
   final String? subtitle;
   final bool confirmEnabled;
+
+  /// Control pinned above the confirm button, always on screen (e.g. the
+  /// hold-to-align key), so the player never scrolls to find it.
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -136,16 +141,25 @@ class ModuleFrame extends StatelessWidget {
                 decoration: const BoxDecoration(
                   border: Border(top: BorderSide(color: AppColors.metalGrey)),
                 ),
-                child: IgnorePointer(
-                  ignoring: !confirmEnabled,
-                  child: Opacity(
-                    opacity: confirmEnabled ? 1 : 0.5,
-                    child: MenuButton(
-                      label: 'CONFIRMAR RESPOSTA',
-                      onPressed: onConfirm,
-                      color: type.color,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (action != null) ...[
+                      action!,
+                      const SizedBox(height: 12),
+                    ],
+                    IgnorePointer(
+                      ignoring: !confirmEnabled,
+                      child: Opacity(
+                        opacity: confirmEnabled ? 1 : 0.5,
+                        child: MenuButton(
+                          label: 'CONFIRMAR RESPOSTA',
+                          onPressed: onConfirm,
+                          color: type.color,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -154,6 +168,61 @@ class ModuleFrame extends StatelessWidget {
       ),
     );
     return HackFlash(child: page);
+  }
+}
+
+/// Key that aligns while held and locks when released. A raw [Listener], so
+/// a finger drifting while the phone turns does not cancel the hold.
+class HoldToAlignButton extends StatelessWidget {
+  const HoldToAlignButton({
+    super.key,
+    required this.color,
+    required this.aligning,
+    required this.onStart,
+    required this.onRelease,
+    this.reading,
+  });
+
+  /// Live value shown above the key, so the player sees it while holding.
+  final String? reading;
+  final Color color;
+  final bool aligning;
+  final VoidCallback onStart;
+  final VoidCallback onRelease;
+
+  @override
+  Widget build(BuildContext context) {
+    final key = Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) => onStart(),
+      onPointerUp: (_) => onRelease(),
+      onPointerCancel: (_) => onRelease(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        alignment: Alignment.center,
+        decoration: glowingCardDecoration(
+          glowColor: color.withValues(alpha: aligning ? 0.3 : 0.1),
+          borderColor: color,
+        ),
+        child: Text(
+          aligning ? 'SOLTA PARA FIXAR' : 'MANTER PARA ALINHAR',
+          style: TextStyle(color: color, fontSize: 18),
+        ),
+      ),
+    );
+    if (reading == null) return key;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          reading!,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: color, fontSize: 28),
+        ),
+        const SizedBox(height: 8),
+        key,
+      ],
+    );
   }
 }
 

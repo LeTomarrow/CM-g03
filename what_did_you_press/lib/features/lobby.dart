@@ -202,63 +202,46 @@ class _LobbyPageState extends ConsumerState<LobbyPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            if (room != null)
+            const SizedBox(height: 24),
+            if (connection != null) ...[
+              if (room != null) ...[
+                MenuButton(
+                  label: room.status == 'ready'
+                      ? (isHost ? 'COMEÇAR JOGO' : 'À ESPERA DO ANFITRIÃO')
+                      : 'A AGUARDAR JOGADOR',
+                  onPressed: () => _startGame(lobby),
+                  color: AppColors.success,
+                  enabled: lobby.canStart,
+                ),
+                const SizedBox(height: 16),
+              ],
               Row(
                 children: [
                   Expanded(
-                    child: IgnorePointer(
-                      ignoring: !lobby.canStart,
-                      child: Opacity(
-                        opacity: lobby.canStart ? 1 : 0.5,
-                        child: MenuButton(
-                          label: room.status == 'ready'
-                              ? (isHost
-                                    ? 'COMEÇAR JOGO'
-                                    : 'À ESPERA DO ANFITRIÃO')
-                              : 'A AGUARDAR JOGADOR',
-                          onPressed: () => _startGame(lobby),
-                          color: AppColors.success,
-                        ),
-                      ),
+                    child: MenuButton(
+                      label: 'TROCAR PAPÉIS',
+                      onPressed: _controller.switchRoles,
+                      color: AppColors.metalGrey,
+                      enabled: !rolesFixed,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: IgnorePointer(
-                      ignoring: busy,
-                      child: Opacity(
-                        opacity: busy ? 0.5 : 1,
-                        child: MenuButton(
-                          label: isHost ? 'ENCERRAR SALA' : 'SAIR DA SALA',
-                          onPressed: _leaveRoom,
-                          color: isHost
-                              ? AppColors.danger
-                              : AppColors.metalGrey,
-                        ),
-                      ),
+                    child: MenuButton(
+                      label: isHost ? 'ENCERRAR SALA' : 'SAIR DA SALA',
+                      onPressed: _leaveRoom,
+                      color: isHost ? AppColors.danger : AppColors.metalGrey,
+                      enabled: !busy,
                     ),
                   ),
                 ],
               ),
-            IgnorePointer(
-              ignoring: rolesFixed,
-              child: Opacity(
-                opacity: rolesFixed ? 0.5 : 1,
-                child: MenuButton(
-                  label: 'TROCAR PAPÉIS',
-                  onPressed: _controller.switchRoles,
-                  color: AppColors.metalGrey,
-                ),
-              ),
-            ),
-            // A bomb room is created automatically; joining by code is for
-            // ordinary rooms only.
-            if (widget.bombId == null) ...[
-              const SizedBox(height: 24),
+            ] else if (widget.bombId == null) ...[
+              // A bomb room is created automatically; joining by code is
+              // for ordinary rooms only.
               TextField(
                 controller: _codeController,
-                enabled: !busy && connection == null,
+                enabled: !busy,
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -276,51 +259,46 @@ class _LobbyPageState extends ConsumerState<LobbyPage> {
                   ),
                 ),
               ),
-            ],
-            const SizedBox(height: 16),
-            if (busy) const LinearProgressIndicator(),
-            if (lobby.error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  lobby.error!,
-                  style: TextStyle(color: AppColors.danger),
-                ),
-              ),
-            if (widget.bombId == null)
-              IgnorePointer(
-                ignoring: busy || connection != null,
-                child: Opacity(
-                  opacity: busy || connection != null ? 0.5 : 1,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: MenuButton(
-                          label: 'ENTRAR',
-                          onPressed: () => _controller.connect(
-                            create: false,
-                            code: _codeController.text,
-                          ),
-                          color: AppColors.neonBlue,
-                        ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: MenuButton(
+                      label: 'ENTRAR',
+                      onPressed: () => _controller.connect(
+                        create: false,
+                        code: _codeController.text,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: MenuButton(
-                          label: 'CRIAR',
-                          onPressed: () => _controller.connect(create: true),
-                          color: AppColors.amber,
-                        ),
-                      ),
-                    ],
+                      color: AppColors.neonBlue,
+                      enabled: !busy,
+                    ),
                   ),
-                ),
-              )
-            else if (connection == null && !busy)
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: MenuButton(
+                      label: 'CRIAR',
+                      onPressed: () => _controller.connect(create: true),
+                      color: AppColors.amber,
+                      enabled: !busy,
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (!busy)
               MenuButton(
                 label: 'CRIAR SALA',
                 onPressed: () => _controller.connect(create: true),
                 color: AppColors.amber,
+              ),
+            const SizedBox(height: 16),
+            if (busy) const LinearProgressIndicator(),
+            if (lobby.error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  lobby.error!,
+                  style: TextStyle(color: AppColors.danger),
+                ),
               ),
             if (room != null) ...[
               const SizedBox(height: 16),
